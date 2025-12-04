@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
     int group_pid = operator_pid;
 
     int system_commander_pid = creat_system_commander(group_pid);
-    sleep(5);
+    sleep(25);
 
     kill_all_in_group(group_pid);
     return 0;

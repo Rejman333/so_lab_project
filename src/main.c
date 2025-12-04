@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     char cwd[1024];
     getcwd(cwd, sizeof(cwd));
     printf("Current working dir: %s\n", cwd);
@@ -15,7 +15,7 @@ int main(int argc, char* argv[]) {
 
     pid_t system_commander_pid = fork();
     if (system_commander_pid == 0) {
-        execl("./system_commander","./operator",NULL);
+        execl("./system_commander", "./operator",NULL);
         perror("exec operator");
         return 1;
     }
@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
     if (operator_pid == 0) {
         char pid_str[32];
         snprintf(pid_str, sizeof(pid_str), "%d", system_commander_pid);
-        execl("./operator","./operator",pid_str);
+        execl("./operator", "./operator", pid_str, NULL);
 
         perror("exec operator");
         return 1;

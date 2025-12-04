@@ -1,6 +1,7 @@
 #include <stdio.h>
+#include <unistd.h>
 
 int main(void) {
-    printf("Hello, World!\n");
+    printf("[dron] PID=%d, PGID=%d\n", getpid(), getpgid(0));
     return 0;
 }

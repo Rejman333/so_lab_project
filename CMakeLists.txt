@@ -12,16 +12,16 @@ add_executable(main_program
 )
 
 # --- dron ---
-add_executable(dron_program
+add_executable(dron
         ${SRC_DIR}/dron/dron.c
 )
 
 # --- operator ---
-add_executable(operator_program
+add_executable(operator
         ${SRC_DIR}/operator/operator.c
 )
 
 # --- system commander ---
-add_executable(system_commander_program
+add_executable(system_commander
         ${SRC_DIR}/system_commander/system_commander.c
 )

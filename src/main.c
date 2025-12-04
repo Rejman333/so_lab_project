@@ -4,35 +4,48 @@
 #include <sys/types.h>
 #include <stdlib.h>
 
+#include "printer.h"
+
+#define PROCESS_NAME "Main"
+#define PROCESS_COLOR COLOR_BLUE
+
+int creat_operator() {
+    int operator_pid = fork();
+    if (operator_pid == 0) {
+        execl("./operator", "./operator", NULL);
+        perror("exec operator");
+        return 1;
+    }
+
+    return operator_pid;
+}
+
+int creat_system_commander(int group_pid) {
+    int system_commander_pid = fork();
+    if (system_commander_pid == 0) {
+        char pid_str[32];
+        snprintf(pid_str, sizeof(pid_str), "%d", group_pid);
+        execl("./system_commander", "./operator", pid_str,NULL);
+        perror("exec operator");
+        return 1;
+    }
+    return system_commander_pid;
+}
+
+void kill_all_in_group(int group_pid) {
+    print_msg(PROCESS_NAME, PROCESS_COLOR, "Killing group (PGID = %d)", group_pid);
+    kill(-group_pid, SIGTERM);
+}
 
 int main(int argc, char *argv[]) {
-    char cwd[1024];
-    getcwd(cwd, sizeof(cwd));
-    printf("Current working dir: %s\n", cwd);
-    printf("[main] PID=%d, PGID=%d (main NIE jest w grupie)\n",
-           getpid(), getpgid(0));
+    print_msg(PROCESS_NAME,PROCESS_COLOR, "Started");
 
+    int operator_pid = creat_operator();
+    int group_pid = operator_pid;
 
-    pid_t system_commander_pid = fork();
-    if (system_commander_pid == 0) {
-        execl("./system_commander", "./operator",NULL);
-        perror("exec operator");
-        return 1;
-    }
-
-    pid_t operator_pid = fork();
-    if (operator_pid == 0) {
-        char pid_str[32];
-        snprintf(pid_str, sizeof(pid_str), "%d", system_commander_pid);
-        execl("./operator", "./operator", pid_str, NULL);
-
-        perror("exec operator");
-        return 1;
-    }
-
+    int system_commander_pid = creat_system_commander(group_pid);
     sleep(5);
 
-    printf("[main] Killing group (PGID = %d)\n", system_commander_pid);
-    kill(-system_commander_pid, SIGTERM);
+    kill_all_in_group(group_pid);
     return 0;
 }

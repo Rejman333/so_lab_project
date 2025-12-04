@@ -3,6 +3,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "printer.h"
+
+#define PROCESS_NAME "System Commander"
+#define PROCESS_COLOR COLOR_YELLOW
+
 void send_add_drones(const pid_t dron_pid) {
     if (kill(dron_pid,SIGUSR1) < 0) {
         perror("kill error");
@@ -25,11 +30,13 @@ void send_suicide(const pid_t dron_pid) {
 }
 
 int main(int argc, char* argv[]) {
+    pid_t group_pid = (pid_t)atoi(argv[1]);
+    setpgid(0, group_pid);
 
-    setpgid(0, getpid());
+    print_msg(PROCESS_NAME, PROCESS_COLOR,"Started");
 
     while (1) {
-        printf("[system_commander] PID=%d, PGID=%d\n", getpid(), getpgid(0));
+        print_msg(PROCESS_NAME, PROCESS_COLOR,"");
         sleep(1);
     }
 

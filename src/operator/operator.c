@@ -13,12 +13,12 @@ int max_drones = 10;
 
 void add_max_drones_handler(int sig) {
     max_drones = max_drones * 2;
-    print_msg(PROCESS_NAME, PROCESS_COLOR,"New max drones: %d", max_drones);
+    print_msg("New max drones: %d", max_drones);
 }
 
 void decrese_max_drones_handler(int sig) {
     max_drones = max_drones / 2;
-    print_msg(PROCESS_NAME, PROCESS_COLOR,"New max drones: %d", max_drones);
+    print_msg("New max drones: %d", max_drones);
 }
 
 int creat_dron(int group_pid) {
@@ -36,6 +36,8 @@ int creat_dron(int group_pid) {
 int main(int argc, char* argv[]) {
     setpgid(0, getpid());
 
+    setup_print(PROCESS_NAME, PROCESS_COLOR);
+
     struct sigaction sa1;
     sa1.sa_handler = add_max_drones_handler;
     sigemptyset(&sa1.sa_mask);
@@ -48,14 +50,14 @@ int main(int argc, char* argv[]) {
     sa2.sa_flags = 0;
     sigaction(SIGUSR2, &sa2, NULL);
 
-    print_msg(PROCESS_NAME, PROCESS_COLOR,"Started");
+    print_msg("Started");
 
     for (int i = 0; i < START_DRON_NUMBER; ++i) {
         creat_dron(getpid());
     }
 
     while (1) {
-        print_msg(PROCESS_NAME, PROCESS_COLOR,"");
+        print_msg("");
         sleep(1);
     }
 

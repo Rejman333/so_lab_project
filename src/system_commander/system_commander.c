@@ -33,10 +33,12 @@ int main(int argc, char* argv[]) {
     pid_t group_pid = (pid_t)atoi(argv[1]);
     setpgid(0, group_pid);
 
-    print_msg(PROCESS_NAME, PROCESS_COLOR,"Started");
+    setup_print(PROCESS_NAME, PROCESS_COLOR);
+
+    print_msg("Started");
 
     while (1) {
-        print_msg(PROCESS_NAME, PROCESS_COLOR,"");
+        print_msg("");
         sleep(1);
     }
 

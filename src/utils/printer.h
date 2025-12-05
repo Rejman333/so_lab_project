@@ -9,4 +9,11 @@
 #define COLOR_CYAN    "\033[36m"
 #define COLOR_WHITE   "\033[37m"
 
-void print_msg(const char* process_name, const char* color, const char* fmt, ...);
+
+void setup_print(const char* name, const char* color);
+
+void print_msg(const char* fmt, ...);
+
+void print_error(const char* fmt, ...);
+
+void print_msg_color(const char* color, const char* fmt, ...);

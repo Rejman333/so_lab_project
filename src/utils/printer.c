@@ -5,57 +5,75 @@
 #include <time.h>
 #include <stdarg.h>
 
-static const char* PROCESS_NAME = "Unknown";
-static const char* PROCESS_COLOR = "\033[0m";
+#define BUFFER_SIZE 1024
 
-void setup_print(const char* name, const char* color) {
+static const char *PROCESS_NAME = "Unknown";
+static const char *PROCESS_COLOR = "\033[0m";
+static int PROCESS_PID = -1;
+
+void setup_print(const char *name, const char *color) {
     PROCESS_NAME = name;
     PROCESS_COLOR = color;
+    PROCESS_PID = getpid();
 }
 
-static void print_internal(const char* color, const char* fmt, va_list args) {
-    char buffer[1024];
-    char msg_buffer[800];
+void print_internal(const char *color, const char *fmt, va_list args) {
+    char buffer[BUFFER_SIZE];
     char time_buffer[9];
 
+
     time_t rawtime = time(NULL);
-    struct tm* timeinfo = localtime(&rawtime);
-    strftime(time_buffer, sizeof(time_buffer), "%H:%M:%S", timeinfo);
+    struct tm timeinfo;
+    localtime_r(&rawtime, &timeinfo);
+    strftime(time_buffer, sizeof(time_buffer), "%H:%M:%S", &timeinfo);
 
-    vsnprintf(msg_buffer, sizeof(msg_buffer), fmt, args);
-
-    pid_t pid = getpid();
-
-    int len = snprintf(
+    int pos = snprintf(
         buffer,
-        sizeof(buffer),
-        "%s[%s] [%s (PID=%d)] %s\033[0m\n",
+        BUFFER_SIZE,
+        "%s[%s] [%s (PID=%d)] ",
         color,
         time_buffer,
         PROCESS_NAME,
-        pid,
-        msg_buffer
+        PROCESS_PID
     );
 
-    write(STDOUT_FILENO, buffer, len);
+    pos += vsnprintf(
+        buffer + pos,
+        BUFFER_SIZE - pos,
+        fmt,
+        args
+    );
+
+    pos += snprintf(
+        buffer + pos,
+        BUFFER_SIZE - pos,
+        "\033[0m\n"
+    );
+
+    if (pos < 0) {
+        pos = 0;
+    } else if (pos >= BUFFER_SIZE) {
+        pos = BUFFER_SIZE - 1;
+    }
+
+    write(STDOUT_FILENO, buffer, pos);
 }
 
-void print_msg(const char* fmt, ...) {
+void print_msg(const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
     print_internal(PROCESS_COLOR, fmt, args);
     va_end(args);
 }
 
-//ToDO Remake
-void print_error(const char* fmt, ...) {
+void print_error(const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    print_internal(PROCESS_COLOR, fmt, args);
+    print_internal(COLOR_RED, fmt, args);
     va_end(args);
 };
 
-void print_msg_color(const char* color, const char* fmt, ...) {
+void print_msg_color(const char *color, const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
     print_internal(color, fmt, args);

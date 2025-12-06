@@ -12,12 +12,14 @@
 #define CREAT_FILE 1
 #define DONT_CREAT_FILE 0
 
+//Todo rethink this approach
+
 static int grab_key_from_file(const char *file_name, bool create_if_not_exists) {
 
     int fd;
 
     if (create_if_not_exists) {
-        fd = open(file_name, O_CREAT | O_RDWR, 0500);
+        fd = open(file_name, O_CREAT | O_RDWR, 0600);
     } else {
         fd = open(file_name, O_RDWR);
     }
@@ -41,8 +43,6 @@ static int grab_key_from_file(const char *file_name, bool create_if_not_exists) 
 
     return key;
 }
-
-
 
 int create_semaphore(const char *file_name, int semaphore_starting_value) {
     int key = grab_key_from_file(file_name, CREAT_FILE);

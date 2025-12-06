@@ -5,67 +5,58 @@
 #include <sys/sem.h>
 
 #include "printer.h"
+#include "semaphore.h"
+#include "../ipc/semaphore.h"
 
 #define PROCESS_NAME "Dron"
 #define PROCESS_COLOR COLOR_MAGENTA
 
-void suicide_handler(int sig) {
-    print_msg(PROCESS_NAME, PROCESS_COLOR,"Suicided");
-    exit(0);
+#define DRON_KEY_FILE "dron_semaphore_key"
+
+void sig_end_handler(int sig) {
+    print_msg("Received SIGTERM, shutting down...");
+    _exit(0);
 }
 
-void change_status() {
+void sig_suicide_handler(int sig) {
+    print_msg("Suicided");
+    _exit(0);
 }
 
 int main(int argc, char* argv[]) {
-    pid_t group_pid = (pid_t)atoi(argv[1]);
-    setpgid(0, group_pid);
+    int semaphore_id = atoi(argv[1]);
+
     setup_print(PROCESS_NAME, PROCESS_COLOR);
 
-    struct sigaction sa;
-    sa.sa_handler = suicide_handler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sigaction(SIGUSR1, &sa, NULL);
+    struct sigaction sig_end;
+    sig_end.sa_handler = sig_end_handler;
+    sigfillset(&sig_end.sa_mask);
+    sig_end.sa_flags = 0;
+    sigaction(SIGTERM, &sig_end, NULL);
 
-    key_t key = ftok("semfile", 1);
-    if (key == -1) { perror("ftok"); exit(1); }
+    struct sigaction sif_suicide;
+    sif_suicide.sa_handler = sig_suicide_handler;
+    sigfillset(&sif_suicide.sa_mask);
+    sif_suicide.sa_flags = 0;
+    sigaction(SIGUSR1, &sif_suicide, NULL);
 
-    int semid = semget(key, 1, IPC_CREAT |IPC_EXCL | 0666);
-    if (semid >= 0) {
-
-        print_msg("Semaphore created, with initial value of: 2.");
-        if (semctl(semid, 0, SETVAL, 2) == -1) {
-            perror("semctl SETVAL");
-            exit(1);
-        }
-    } else {
-        // Semafor już istnieje → otwórz go
-        semid = semget(key, 1, 0666);
-        if (semid == -1) { perror("semget"); exit(1); }
-        print_msg("Semaphore already existed.");
-    }
-
-    struct sembuf lock = {0, -1, 0};   // wejdź
-    struct sembuf unlock = {0, +1, 0}; // wyjdź
+    struct sembuf lock = {0, -1, 0};
+    struct sembuf unlock = {0, +1, 0};
 
     print_msg("Started");
 
     while (1) {
-        // próba wejścia
         print_msg("Waiting for semaphore...");
-        if (semop(semid, &lock, 1) == -1) {
-            perror("semop -1");
+        if (semop(semaphore_id, &lock, 1) == -1) {
+            print_error("While waiting for semaphore: semop -1");
             exit(1);
         }
 
-        // sekcja krytyczna
         print_msg(">>> Entered critical section");
         sleep(3);
 
-        // wyjście
-        if (semop(semid, &unlock, 1) == -1) {
-            perror("semop +1");
+        if (semop(semaphore_id, &unlock, 1) == -1) {
+            print_error("While leaving semaphore: semop +1");
             exit(1);
         }
 

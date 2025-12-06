@@ -55,7 +55,10 @@ int create_semaphore(const char *file_name, int semaphore_starting_value) {
         exit(1);
     }
 
-    if (semctl(semaphore_id, 0, SETVAL, semaphore_starting_value) == -1) {
+    union semun arg;
+    arg.val = semaphore_starting_value;
+
+    if (semctl(semaphore_id, 0, SETVAL, arg) == -1) {
         print_error("Semaphore ID: %d, experienced an error", semaphore_id);
         exit(1);
     }

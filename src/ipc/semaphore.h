@@ -6,8 +6,8 @@ union semun {
     unsigned short *array;
 };
 
-int create_semaphore();
+int create_semaphore(const char *file_name, int semaphore_starting_value);
 
-int get_semaphore();
+int get_semaphore(const char *file_name);
 
-void delete_semaphore(int semid);
+void delete_semaphore(int semaphore_id);

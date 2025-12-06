@@ -12,9 +12,9 @@
 //Todo obsługa błedów i wyjątków
 
 
-int create_semaphore() {
+int create_semaphore(const char *file_name) {
     // Ensure the ftok file exists
-    int fd = open("semfile", O_CREAT | O_RDWR, 0666);
+    int fd = open(file_name, O_CREAT | O_RDWR, 0500);
     if (fd == -1) {
         perror("open semfile");
         exit(1);

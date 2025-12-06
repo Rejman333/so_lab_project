@@ -17,10 +17,9 @@ void setup_print(const char *name, const char *color) {
     PROCESS_PID = getpid();
 }
 
-void print_internal(const char *color, const char *fmt, va_list args) {
+void print_internal(int output, const char *color, const char *fmt, va_list args) {
     char buffer[BUFFER_SIZE];
     char time_buffer[9];
-
 
     time_t rawtime = time(NULL);
     struct tm timeinfo;
@@ -56,26 +55,26 @@ void print_internal(const char *color, const char *fmt, va_list args) {
         pos = BUFFER_SIZE - 1;
     }
 
-    write(STDOUT_FILENO, buffer, pos);
+    write(output, buffer, pos);
 }
 
 void print_msg(const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    print_internal(PROCESS_COLOR, fmt, args);
+    print_internal(STDOUT_FILENO,PROCESS_COLOR, fmt, args);
     va_end(args);
 }
 
 void print_error(const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    print_internal(COLOR_RED, fmt, args);
+    print_internal(STDERR_FILENO,COLOR_RED, fmt, args);
     va_end(args);
 };
 
 void print_msg_color(const char *color, const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    print_internal(color, fmt, args);
+    print_internal(STDOUT_FILENO,color, fmt, args);
     va_end(args);
 }

@@ -2,8 +2,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <stdlib.h>
-#include <sys/wait.h>
-
+#include <pthread.h>
 #include "printer.h"
 #include "semaphore.h"
 
@@ -39,7 +38,7 @@ void decrease_max_drones_handler(int sig) {
     print_msg("New max drones: %d", max_drones);
 }
 
-int creat_dron(int group_pid, int gate_semaphore_id) {
+int creat_dron(int gate_semaphore_id) {
     int dron_pid = fork();
     if (dron_pid == 0) {
         char sem_str[32];
@@ -50,6 +49,19 @@ int creat_dron(int group_pid, int gate_semaphore_id) {
         exit(1);
     }
     return dron_pid;
+}
+
+void* thread_func(void* arg) {
+    print_msg("Dron maker started");
+    int number_of_drones_in_base = 0;
+    while (1) {
+        if (number_of_drones_in_base < max_drones) {
+            creat_dron(gate_semaphore_id);
+            number_of_drones_in_base++;
+        }
+        sleep(1);
+    }
+    return NULL;
 }
 
 int main(int argc, char* argv[]) {
@@ -76,10 +88,19 @@ int main(int argc, char* argv[]) {
 
     gate_semaphore_id = create_semaphore(GATE_FILE, GATE_NUMBER);
 
+    pthread_t tid;
+    int value = 123;
+
+    if (pthread_create(&tid, NULL, thread_func, &value) != 0) {
+        print_error("Thread error");
+        return 1;
+    }
+    pthread_detach(tid);
+
     print_msg("Started");
 
     for (int i = 0; i < START_DRON_NUMBER; ++i) {
-        creat_dron(getpid(),gate_semaphore_id);
+        creat_dron(gate_semaphore_id);
     }
 
     while (1) {

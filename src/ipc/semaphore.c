@@ -1,51 +1,17 @@
-#include "semaphore.h"
+#include "ipc.h"
 
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/sem.h>
-#include <stdbool.h>
 
 #include "printer.h"
 
-#define CREAT_FILE 1
 #define DONT_CREAT_FILE 0
 
-//Todo rethink this approach
-
-static int grab_key_from_file(const char *file_name, bool create_if_not_exists) {
-
-    int fd;
-
-    if (create_if_not_exists) {
-        fd = open(file_name, O_CREAT | O_RDWR, 0600);
-    } else {
-        fd = open(file_name, O_RDWR);
-    }
-
-    if (fd == -1) {
-        if (create_if_not_exists)
-            print_error("Failed to open or create key file: %s", file_name);
-        else
-            print_error("Key file does not exist: %s", file_name);
-        _exit(1);
-    }
-
-    close(fd);
-
-    // Generate key
-    key_t key = ftok(file_name, 1);
-    if (key == -1) {
-        print_error("Failed to generate key using ftok() for file: %s", file_name);
-        _exit(1);
-    }
-
-    return key;
-}
-
 int create_semaphore(const char *file_name, int semaphore_starting_value) {
-    int key = grab_key_from_file(file_name, CREAT_FILE);
+    int key = grab_key_from_file(file_name);
 
     // Try to CREATE semaphore; fail if it exists
     int semaphore_id = semget(key, 1, IPC_CREAT | IPC_EXCL | 0666);
@@ -68,7 +34,7 @@ int create_semaphore(const char *file_name, int semaphore_starting_value) {
 }
 
 int get_semaphore(const char *file_name) {
-    int key = grab_key_from_file(file_name, DONT_CREAT_FILE);
+    int key = grab_key_from_file(file_name);
 
     // Try to CREATE semaphore; fail if it exists
     int semaphore_id = semget(key, 1,0600);

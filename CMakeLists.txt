@@ -15,19 +15,20 @@ target_include_directories(printer PUBLIC
         ${SRC_DIR}/utils
 )
 
-# === semaphore library ===
-add_library(semaphore
+
+add_library(ipc
+        ${SRC_DIR}/ipc/key.c
         ${SRC_DIR}/ipc/semaphore.c
+        ${SRC_DIR}/ipc/shm.c
+
 )
 
-
-target_include_directories(semaphore PUBLIC
+target_include_directories(ipc PUBLIC
         ${SRC_DIR}/ipc
-        ${SRC_DIR}/utils     # <-- kluczowe!
+        ${SRC_DIR}/utils
 )
 
-# oraz musi linkować printer, bo korzysta z print_error()
-target_link_libraries(semaphore
+target_link_libraries(ipc
         PRIVATE printer
 )
 
@@ -38,7 +39,7 @@ add_executable(main_program
 
 target_link_libraries(main_program
         printer
-        semaphore
+        ipc
 )
 
 # === dron ===
@@ -48,7 +49,7 @@ add_executable(dron
 
 target_link_libraries(dron
         printer
-        semaphore
+        ipc
 )
 
 # === operator ===
@@ -58,7 +59,7 @@ add_executable(operator
 
 target_link_libraries(operator
         printer
-        semaphore
+        ipc
 )
 
 # === system commander ===
@@ -68,5 +69,5 @@ add_executable(system_commander
 
 target_link_libraries(system_commander
         printer
-        semaphore   # jeśli korzysta z semaforów
+        ipc
 )

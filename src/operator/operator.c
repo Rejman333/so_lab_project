@@ -3,8 +3,9 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <pthread.h>
+
+#include "ipc.h"
 #include "printer.h"
-#include "semaphore.h"
 
 #define PROCESS_NAME "Operator"
 #define PROCESS_COLOR COLOR_CYAN

@@ -89,9 +89,8 @@ int main(int argc, char* argv[]) {
     gate_semaphore_id = create_semaphore(GATE_FILE, GATE_NUMBER);
 
     pthread_t tid;
-    int value = 123;
 
-    if (pthread_create(&tid, NULL, thread_func, &value) != 0) {
+    if (pthread_create(&tid, NULL, thread_func, NULL) != 0) {
         print_error("Thread error");
         return 1;
     }

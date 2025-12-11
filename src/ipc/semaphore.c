@@ -29,7 +29,7 @@ static int grab_key_from_file(const char *file_name, bool create_if_not_exists) 
             print_error("Failed to open or create key file: %s", file_name);
         else
             print_error("Key file does not exist: %s", file_name);
-        exit(1);
+        _exit(1);
     }
 
     close(fd);
@@ -38,7 +38,7 @@ static int grab_key_from_file(const char *file_name, bool create_if_not_exists) 
     key_t key = ftok(file_name, 1);
     if (key == -1) {
         print_error("Failed to generate key using ftok() for file: %s", file_name);
-        exit(1);
+        _exit(1);
     }
 
     return key;
@@ -52,7 +52,7 @@ int create_semaphore(const char *file_name, int semaphore_starting_value) {
     if (semaphore_id == -1) {
         // Semaphore already exists OR other error
         print_error("Failed to create a semaphore on key: %d, or it already existed", key);
-        exit(1);
+        _exit(1);
     }
 
     union semun arg;
@@ -60,7 +60,7 @@ int create_semaphore(const char *file_name, int semaphore_starting_value) {
 
     if (semctl(semaphore_id, 0, SETVAL, arg) == -1) {
         print_error("Semaphore ID: %d, experienced an error", semaphore_id);
-        exit(1);
+        _exit(1);
     }
     print_msg("Semaphore ID: %d : 0 created, with starting value of: %d", semaphore_id, semaphore_starting_value);
 
@@ -75,7 +75,7 @@ int get_semaphore(const char *file_name) {
     if (semaphore_id == -1) {
         // Semaphore already exists OR other error
         print_error("Failed to get a semaphore on key: %d", semaphore_id);
-        exit(1);
+        _exit(1);
     }
 
     return semaphore_id;
@@ -84,6 +84,6 @@ int get_semaphore(const char *file_name) {
 void delete_semaphore(int semaphore_id) {
     if (semctl(semaphore_id, 0, IPC_RMID) == -1) {
         print_error("Failed to delete semaphore ID %d", semaphore_id);
-        exit(1);
+        _exit(1);
     }
 }

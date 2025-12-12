@@ -6,7 +6,7 @@
 #include "printer.h"
 
 int shm_create(key_t key, size_t size) {
-    int shmid = shmget(key, size, 0600 | IPC_EXCL);
+    int shmid = shmget(key, size, 0600 | IPC_CREAT | IPC_EXCL);
     if (shmid == -1) {
         print_error("Failed to create sheared memory");
         _exit(1);
@@ -18,7 +18,7 @@ int shm_open_existing(key_t key) {
     int shmid = shmget(key, 0, 0600);
     if (shmid == -1) {
         print_error("shm_open_existing: shmget");
-        _exit(1);
+        return -1;
     }
     return shmid;
 }
@@ -50,4 +50,3 @@ int shm_destroy(int shmid) {
     }
     return 0;
 }
-

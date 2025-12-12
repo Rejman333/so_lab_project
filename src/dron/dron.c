@@ -6,40 +6,14 @@
 #include <time.h>
 #include <sys/sem.h>
 
+#include "ipc.h"
 #include "printer.h"
+
+#define GATE_KEY_FILE_NAME "gate_key"
 
 #define PROCESS_NAME "Dron"
 #define PROCESS_COLOR COLOR_MAGENTA
 
-#define DRON_KEY_FILE "dron_semaphore_key"
-
-
-#define MAXIMUM_LOADING_TIMES 5
-#define BATTERY_INTERVAL 100;
-
-typedef enum {
-    LOCATION_UNDEFINE,
-    LOCATION_BASE,
-    LOCATION_MISSION
-} Location;
-
-int semaphore_id = -1;
-
-Location location = LOCATION_UNDEFINE;
-
-int max_loading_circles = 10;
-int current_loading_circle = 0;
-
-// int maximum_charge_time = 10000000;
-// int boundary_charge_time = lroundf(maximum_charge_time * 0.2f);
-// int current_charge_time = 0;
-//
-// int maximum_flight_time = lroundf(maximum_charge_time * 2.5f);
-// int boundary_flight_time = lroundf(maximum_flight_time * 0.2f);
-// int current_flight_time = 0;
-
-
-int mission_time = 0;
 
 void sig_end_handler(int sig) {
     print_msg("Received SIGTERM, shutting down...");
@@ -61,10 +35,15 @@ int get_random_mission_time(int min, int max) {
 
 
 int main(int argc, char *argv[]) {
-    int semaphore_id = atoi(argv[1]);
+    setup_print(PROCESS_NAME, PROCESS_COLOR);
+    if (argc < 2) {
+        print_error("No location provided\n");
+        return 1;
+    }
+
+    Location location = (Location)atoi(argv[1]);
 
     srand(time(NULL));
-    setup_print(PROCESS_NAME, PROCESS_COLOR);
 
     struct sigaction sig_end;
     sig_end.sa_handler = sig_end_handler;
@@ -78,34 +57,18 @@ int main(int argc, char *argv[]) {
     sif_suicide.sa_flags = 0;
     sigaction(SIGUSR1, &sif_suicide, NULL);
 
-    struct sembuf lock = {0, -1, 0};
-    struct sembuf unlock = {0, +1, 0};
+    key_t gate_key = grab_key_from_file(GATE_KEY_FILE_NAME);
+    if (gate_key < 0) {
+        print_error("Cant grab key");
+        _exit(1);
+    }
+    int gate_semaphore_id = get_semaphore(gate_key);
+
 
     print_msg("Started");
-
     while (1) {
-        time_t rawtime = time(NULL);
-
-        // switch (location) {
-        //     case LOCATION_BASE:
-        //         print_msg("Charging Started");
-        //         pthread_t charging_thread;
-        //         if (pthread_create(&charging_thread, NULL, thread_charge_battery, NULL) != 0) {
-        //             print_error("Thread error");
-        //             return 1;
-        //         }
-        //         pthread_join(charging_thread, NULL);
-        //         print_msg("Charging Finished");
-        //         break;
-        //     case LOCATION_MISSION:
-        //         break;
-        //     default:
-        //         print_error("Undefined Location");
-        //         _exit(1);
-        // }
-
         print_msg("Waiting for semaphore...");
-        if (semop(semaphore_id, &lock, 1) == -1) {
+        if (semop(gate_semaphore_id, &SEM_LOCK, 1) == -1) {
             print_error("While waiting for semaphore: semop -1");
             exit(1);
         }
@@ -113,7 +76,7 @@ int main(int argc, char *argv[]) {
         print_msg(">>> Entered critical section");
         sleep(3);
 
-        if (semop(semaphore_id, &unlock, 1) == -1) {
+        if (semop(gate_semaphore_id, &SEM_UNLOCK, 1) == -1) {
             print_error("While leaving semaphore: semop +1");
             exit(1);
         }

@@ -163,7 +163,7 @@ int main(int argc, char *argv[]) {
     //     print_error("System commander process failed to start");
     // }
 
-    print_msg("Cleanup started...");
+    print_msg("Waiting for children...");
 
     // waitpid(system_commander_pid, NULL, 0);
     // print_msg("System_commander joined");

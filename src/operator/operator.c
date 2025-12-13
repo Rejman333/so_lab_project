@@ -29,17 +29,61 @@ void sigusr2_handler(int sig) {
     got_sigusr2 = 1;
 }
 
-int creat_dron(const Location location) {
+int creat_dron(
+    const Location location, SHM_DronInfo *p_shm_dron_info, int shm_dron_info_semaphore_id, int max_loading_cycles) {
+    int slot = -1;
+
+    if (semop(shm_dron_info_semaphore_id, &SEM_LOCK, 1) == -1) {
+        print_error("Failed to open semaphore");
+        return -1;
+    }
+
+    slot = p_shm_dron_info->dron_count;
+
+    p_shm_dron_info->dron_state_array[slot].pid = -1;
+    p_shm_dron_info->dron_state_array[slot].dron_location = location;
+    p_shm_dron_info->dron_state_array[slot].loading_cycles_left = max_loading_cycles;
+    p_shm_dron_info->dron_state_array[slot].last_update = time(NULL);
+
+    p_shm_dron_info->dron_count++;
+    if (location == LOCATION_BASE)
+        p_shm_dron_info->dron_in_base_count++;
+
+    if (semop(shm_dron_info_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+        print_error("Failed to close semaphore");
+        return -1;
+    }
+
     int dron_pid = fork();
 
     if (dron_pid == 0) {
-        char location_arg[16];
-        snprintf(location_arg, sizeof(location_arg), "%d", location);
-        execl("./dron","./dron",location_arg, NULL);
+        char slot_arg[16];
+        snprintf(slot_arg, sizeof(slot_arg), "%d", slot);
+
+        execl(
+            "./dron",
+            "./dron",
+            slot_arg,
+            NULL
+        );
 
         print_error("exec dron");
         _exit(1);
     }
+
+    if (semop(shm_dron_info_semaphore_id, &SEM_LOCK, 1) == -1) {
+        print_error("Failed to open semaphore 2");
+        return -1;
+    }
+
+
+    p_shm_dron_info->dron_state_array[slot].pid = dron_pid;
+
+    if (semop(shm_dron_info_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+        print_error("Failed to close semaphore 2");
+        return -1;
+    }
+
 
     return dron_pid;
 }
@@ -68,15 +112,16 @@ int main(int argc, char *argv[]) {
 
     int starting_drones_count = p_shm_config->starting_drones_count;
     int resupply_interval = p_shm_config->resupply_interval;
-    int target_number_of_drones = starting_drones_count;
-    int max_drones_on_platform = (target_number_of_drones / 2) - 1;
+    int max_loading_cycles = p_shm_config->max_loading_cycles;
 
     if (semop(shm_config_semaphore_id, &SEM_UNLOCK, 1) == -1) {
         print_error("While leaving semaphore: semop +1");
         exit(1);
     }
-
     shm_detach(p_shm_config);
+
+    int target_number_of_drones = starting_drones_count;
+    int max_drones_on_platform = (target_number_of_drones / 2) - 1;
 
 
     key_t shm_dron_info_key = grab_key_from_file(DRON_INFO_KEY_FILE_NAME);
@@ -114,24 +159,15 @@ int main(int argc, char *argv[]) {
     sigaction(SIGUSR2, &sig_decrease_max_drones_handler, NULL);
 
 
-    if (semop(shm_dron_info_semaphore_id, &SEM_LOCK, 1) == -1) {
-        print_error("While waiting for semaphore: semop -1");
-        exit(1);
-    }
-
     for (int i = 0; i < starting_drones_count; ++i) {
         print_msg("Creating dron");
-        p_shm_dron_info->dron_count++;
-        if (creat_dron(LOCATION_MISSION) < 0) {
-            p_shm_dron_info->dron_count--;
+        if (creat_dron(LOCATION_MISSION, p_shm_dron_info, shm_dron_info_semaphore_id, max_loading_cycles) < 0) {
+            print_error("Failed to creat a drone");
+            _exit(-1);
         };
     }
 
-    if (semop(shm_dron_info_semaphore_id, &SEM_UNLOCK, 1) == -1) {
-        print_error("While leaving semaphore: semop +1");
-        exit(1);
-    }
-
+    print_msg("Starting Fabrication");
     while (!got_shutdown_requested) {
         if (got_sigusr1) {
             got_sigusr1 = 0;
@@ -158,16 +194,30 @@ int main(int argc, char *argv[]) {
             print_error("While waiting for semaphore: semop -1");
             exit(1);
         }
-        if (p_shm_dron_info->dron_in_base_count < max_drones_on_platform) {
+
+        int is_place = p_shm_dron_info->dron_in_base_count < max_drones_on_platform;
+
+        if (semop(shm_dron_info_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+            print_error("While leaving semaphore: semop +1");
+            exit(1);
+        }
+
+        if (is_place) {
             print_msg("Creating dron");
-            if (creat_dron(LOCATION_BASE) < 0) {
+            if (creat_dron(LOCATION_BASE, p_shm_dron_info, shm_dron_info_semaphore_id, max_loading_cycles) < 0) {
                 _exit(1);
             };
             p_shm_dron_info->dron_in_base_count++;
             p_shm_dron_info->dron_count++;
         }
 
+        if (semop(shm_dron_info_semaphore_id, &SEM_LOCK, 1) == -1) {
+            print_error("While waiting for semaphore: semop -1");
+            exit(1);
+        }
+
         print_msg("Current dron count: %d", p_shm_dron_info->dron_count);
+        print_msg("Missions completed %d", p_shm_dron_info->missions_completed_count);
 
         if (semop(shm_dron_info_semaphore_id, &SEM_UNLOCK, 1) == -1) {
             print_error("While leaving semaphore: semop +1");

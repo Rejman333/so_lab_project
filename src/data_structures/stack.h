@@ -8,8 +8,8 @@
  * if your problem is more generic.
  */
 
-#define STACK_SUCCESS 1;
-#define STACK_ERROR -1;
+#define STACK_SUCCESS 1
+#define STACK_ERROR -1
 
 typedef struct Stack Stack;
 

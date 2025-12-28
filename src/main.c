@@ -25,6 +25,8 @@
 #define MAXIMUM_CHARGE_TIME_DEFAULT 10000000
 #define MAXIMUM_LOADING_CYCLES 5
 
+#define MAXIMUM_DRONES_IN_MEMORY 1000
+
 void process_argv(SHM_Configuration *p_configuration, int argc, char *argv[]) {
     if (argc > 1) {
         p_configuration->starting_drones_count = atoi(argv[1]);
@@ -62,8 +64,6 @@ void process_argv(SHM_Configuration *p_configuration, int argc, char *argv[]) {
         print_error("Maximum argument count is 4");
         exit(1);
     }
-
-    p_configuration->maximum_drones_count = p_configuration->maximum_drones_count * 2;
 }
 
 void print_configuration(const SHM_Configuration *p_configuration) {
@@ -117,7 +117,6 @@ int main(int argc, char *argv[]) {
     SHM_Configuration *p_shm_config = shm_attach(shm_config_id);
     *p_shm_config = (SHM_Configuration){
         .starting_drones_count = STARTING_DRONE_COUNT_DEFAULT,
-        .maximum_drones_count = STARTING_DRONE_COUNT_DEFAULT * 2,
         .resupply_interval = RESUPPLY_INTERVAL_DEFAULT,
         .maximum_charge_time = MAXIMUM_CHARGE_TIME_DEFAULT,
         .max_loading_cycles = MAXIMUM_LOADING_CYCLES
@@ -131,7 +130,7 @@ int main(int argc, char *argv[]) {
     if (shm_dron_info_key < 0) {
         print_error("Cant grab key");
     }
-    size_t bytes_needed = sizeof(SHM_AllDronesData) + p_shm_config->maximum_drones_count * sizeof(DronData);
+    size_t bytes_needed = sizeof(SHM_AllDronesData) + MAXIMUM_DRONES_IN_MEMORY * sizeof(DronData);
     int shm_dron_info_id = shm_create(shm_dron_info_key, bytes_needed);
 
     SHM_AllDronesData *p_shm_dron_info = shm_attach(shm_dron_info_id);
@@ -142,7 +141,7 @@ int main(int argc, char *argv[]) {
         .dron_count = 0
     };
 
-    bytes_needed = Stack_bytes_needed(p_shm_config->maximum_drones_count, sizeof(int));
+    bytes_needed = Stack_bytes_needed(MAXIMUM_DRONES_IN_MEMORY, sizeof(int));
 
     key_t shm_stack_key = grab_key_from_file(STACK_KEY_FILE_NAME);
     if (shm_stack_key < 0) {
@@ -150,13 +149,13 @@ int main(int argc, char *argv[]) {
     }
     int shm_stack_id = shm_create(shm_stack_key, bytes_needed);
     Stack *p_shm_stack = shm_attach(shm_dron_info_id);
-    Stack_init(p_shm_stack, p_shm_config->maximum_drones_count, sizeof(int));
+    Stack_init(p_shm_stack, MAXIMUM_DRONES_IN_MEMORY, sizeof(int));
     if (!p_shm_stack) {
         print_error("Stack Failed with initialization");
         return -1;
     }
 
-    int index = p_shm_config->maximum_drones_count - 1;
+    int index = MAXIMUM_DRONES_IN_MEMORY - 1;
     while (!Stack_is_full(p_shm_stack)) {
         Stack_push(p_shm_stack, &index);
         index--;

@@ -9,6 +9,7 @@
 
 #define CONFIG_KEY_FILE_NAME "config_key"
 #define DRON_INFO_KEY_FILE_NAME "dron_info_key"
+#define STACK_KEY_FILE_NAME "stack_key"
 
 #define PROCESS_NAME "Operator"
 #define PROCESS_COLOR COLOR_CYAN
@@ -30,7 +31,7 @@ void sigusr2_handler(int sig) {
 }
 
 int creat_dron(
-    const Location location, SHM_DronInfo *p_shm_dron_info, int shm_dron_info_semaphore_id, int max_loading_cycles) {
+    const DronData_Location location, SHM_AllDronesData *p_shm_dron_info, int shm_dron_info_semaphore_id, int max_loading_cycles) {
     int slot = -1;
 
     if (semop(shm_dron_info_semaphore_id, &SEM_LOCK, 1) == -1) {
@@ -38,19 +39,21 @@ int creat_dron(
         return -1;
     }
 
+    DronData dron_data = {};
+
     slot = p_shm_dron_info->dron_count;
 
-    p_shm_dron_info->dron_state_array[slot].pid = -1;
-    p_shm_dron_info->dron_state_array[slot].dron_location = location;
-    p_shm_dron_info->dron_state_array[slot].loading_cycles_left = max_loading_cycles;
-    p_shm_dron_info->dron_state_array[slot].last_update = time(NULL);
+    p_shm_dron_info->drones[slot].pid = -1;
+    p_shm_dron_info->drones[slot].dron_location = location;
+    p_shm_dron_info->drones[slot].loading_cycles_left = max_loading_cycles;
+    p_shm_dron_info->drones[slot].last_update = time(NULL);
 
     p_shm_dron_info->dron_count++;
     if (location == LOCATION_BASE)
         p_shm_dron_info->dron_in_base_count++;
 
     if (semop(shm_dron_info_semaphore_id, &SEM_UNLOCK, 1) == -1) {
-        print_error("Failed to close semaphore");
+        print_error("Failed to unlock semaphore");
         return -1;
     }
 
@@ -77,7 +80,7 @@ int creat_dron(
     }
 
 
-    p_shm_dron_info->dron_state_array[slot].pid = dron_pid;
+    p_shm_dron_info->drones[slot].pid = dron_pid;
 
     if (semop(shm_dron_info_semaphore_id, &SEM_UNLOCK, 1) == -1) {
         print_error("Failed to close semaphore 2");
@@ -136,8 +139,20 @@ int main(int argc, char *argv[]) {
         _exit(1);
     }
 
-    SHM_DronInfo *p_shm_dron_info = shm_attach(shm_dron_info_id);
+    SHM_AllDronesData *p_shm_dron_info = shm_attach(shm_dron_info_id);
+
+    key_t shm_stack_key = grab_key_from_file(STACK_KEY_FILE_NAME);
+    if (shm_stack_key < 0) {
+        print_error("Cant grab key");
+        _exit(1);
+    }
+
+    int shm_stack_id = shm_open_existing(shm_stack_key);
+    Stack* index_stack = shm_attach(shm_stack_id);
+
+
     int shm_dron_info_semaphore_id = get_semaphore(shm_dron_info_key);
+
 
     struct sigaction sig_shutdown_request;
     sig_shutdown_request.sa_handler = shutdown_request_handler;

@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
         _exit(1);
     }
 
-    SHM_DronInfo *p_shm_dron_info = shm_attach(shm_dron_info_id);
+    SHM_AllDronesData *p_shm_dron_info = shm_attach(shm_dron_info_id);
     int shm_dron_info_semaphore_id = get_semaphore(shm_dron_info_key);
 
     struct sigaction sig_end;
@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
     }
 
     //Todo Problem jeśli my_slot ma zły przedział trzeba osbłurzyć!
-    Location location = p_shm_dron_info->dron_state_array[my_slot].dron_location;
+    DronData_Location location = p_shm_dron_info->drones[my_slot].dron_location;
 
     if (semop(shm_dron_info_semaphore_id, &SEM_UNLOCK, 1) == -1) {
         print_error("While waiting for semaphore: semop -1");
@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
     }
 
     print_msg("Started");
-    Location next_location;
+    DronData_Location next_location;
     while (1) {
         switch (location) {
             case LOCATION_BASE:
@@ -106,8 +106,8 @@ int main(int argc, char *argv[]) {
                     exit(1);
                 }
 
-                p_shm_dron_info->dron_state_array[my_slot].loading_cycles_left--;
-                p_shm_dron_info->dron_state_array[my_slot].last_update = time(NULL);
+                p_shm_dron_info->drones[my_slot].loading_cycles_left--;
+                p_shm_dron_info->drones[my_slot].last_update = time(NULL);
 
                 if (semop(gate_semaphore_id, &SEM_UNLOCK, 1) == -1) {
                     print_error("While leaving semaphore: semop +1");
@@ -150,9 +150,9 @@ int main(int argc, char *argv[]) {
         if (next_location == LOCATION_BASE) {
             p_shm_dron_info->dron_in_base_count++;
         }
-        p_shm_dron_info->dron_state_array[my_slot].dron_location = next_location;
-        p_shm_dron_info->dron_state_array[my_slot].last_update = time(NULL);
-        location = p_shm_dron_info->dron_state_array[my_slot].dron_location;
+        p_shm_dron_info->drones[my_slot].dron_location = next_location;
+        p_shm_dron_info->drones[my_slot].last_update = time(NULL);
+        location = p_shm_dron_info->drones[my_slot].dron_location;
 
         sleep(2); //For testing
 

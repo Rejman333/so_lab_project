@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "ipc.h"
 
 #include <unistd.h>
@@ -50,3 +52,39 @@ int shm_destroy(int shmid) {
     }
     return 0;
 }
+
+int SHM_DronInfo_add_dron(SHM_AllDronesData *p_shm_dron_info, Stack *free_space_stack, DronData *p_dron_state) {
+    int out = -1;
+    if (Stack_pop(free_space_stack, &out) == STACK_ERROR) return -1;
+
+    p_shm_dron_info->dron_count++;
+    if (p_dron_state->dron_location == LOCATION_BASE) p_shm_dron_info->dron_in_base_count++;
+    memcpy(&p_shm_dron_info->drones[out], p_dron_state, sizeof(DronData));
+
+    return out;
+};
+
+int SHM_DronInfo_mission_completed(SHM_AllDronesData *p_shm_dron_info) {
+    p_shm_dron_info->missions_completed_count++;
+    return p_shm_dron_info->missions_completed_count;
+};
+
+int SHM_DronInfo_update_dron_location(SHM_AllDronesData *p_shm_dron_info, int dron_index, DronData_Location new_dron_location) {
+    DronData_Location old_location = p_shm_dron_info->drones[dron_index].dron_location;
+    if (old_location == LOCATION_BASE) p_shm_dron_info->dron_in_base_count--;
+    p_shm_dron_info->drones[dron_index].dron_location = new_dron_location;
+    return 0;
+};
+
+int SHM_DronInfo_delete_drone(SHM_AllDronesData *p_shm_dron_info, Stack *free_space_stack, int dron_index) {
+    p_shm_dron_info->dron_count--;
+    p_shm_dron_info->drone_lost_count++;
+    if (p_shm_dron_info->drones[dron_index].dron_location == LOCATION_BASE) {
+        p_shm_dron_info->dron_in_base_count--;
+    }
+    p_shm_dron_info->drones[dron_index].dron_location = LOCATION_UNDEFINE;
+
+    if (Stack_push(free_space_stack, &dron_index) == STACK_ERROR) return -1;
+
+    return dron_index;
+};

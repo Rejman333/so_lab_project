@@ -3,9 +3,11 @@ project(so_drone_swarm C)
 
 set(CMAKE_C_STANDARD 11)
 
-# folder źródłowy
 set(SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 
+add_library(stack
+        ${SRC_DIR}/data_structures/stack.c
+)
 
 add_library(printer
         ${SRC_DIR}/utils/printer.c
@@ -26,10 +28,12 @@ add_library(ipc
 target_include_directories(ipc PUBLIC
         ${SRC_DIR}/ipc
         ${SRC_DIR}/utils
+        ${SRC_DIR}/data_structures
 )
 
 target_link_libraries(ipc
         PRIVATE printer
+        PRIVATE stack
 )
 
 # === main ===
@@ -69,5 +73,15 @@ add_executable(system_commander
 
 target_link_libraries(system_commander
         printer
+        ipc
+)
+
+add_executable(test
+        ${SRC_DIR}/test_stack.c
+)
+
+target_link_libraries(test
+        printer
+        stack
         ipc
 )

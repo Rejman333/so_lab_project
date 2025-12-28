@@ -2,9 +2,7 @@
 #include <sys/types.h>
 #include <sys/sem.h>
 
-#include "printer.h"
-
-// Types for tpc defined
+#include "stack.h"
 
 typedef struct {
     int starting_drones_count;
@@ -42,7 +40,6 @@ union semun {
 };
 
 
-
 #define SEM_LOCK   ((struct sembuf){0, -1, 0})
 #define SEM_UNLOCK ((struct sembuf){0, +1, 0})
 
@@ -52,7 +49,7 @@ int create_semaphore(const key_t key, int semaphore_starting_value);
 
 int get_semaphore(const key_t key);
 
-int  delete_semaphore(int semaphore_id);
+int delete_semaphore(int semaphore_id);
 
 
 int shm_create(key_t key, size_t size);
@@ -64,3 +61,11 @@ void *shm_attach(int shmid);
 int shm_detach(const void *addr);
 
 int shm_destroy(int shmid);
+
+int SHM_DronInfo_add_dron(SHM_DronInfo *p_shm_dron_info, Stack *free_space_stack, Dron_State *p_dron_state);
+
+int SHM_DronInfo_mission_completed(SHM_DronInfo *p_shm_dron_info);
+
+int SHM_DronInfo_update_dron_location(SHM_DronInfo *p_shm_dron_info, int dron_index, Location new_dron_location);
+
+int SHM_DronInfo_delete_drone(SHM_DronInfo *p_shm_dron_info, Stack *free_space_stack, int dron_index);

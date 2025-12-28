@@ -44,24 +44,29 @@ union semun {
 #define SEM_LOCK   ((struct sembuf){0, -1, 0})
 #define SEM_UNLOCK ((struct sembuf){0, +1, 0})
 
+/*
+ * No critical section is required because the file is used only as a stable anchor for ftok();
+ * open(O_CREAT) is atomic and ftok() only reads file metadata without modifying it,
+ * so concurrent calls produce the same key. */
 key_t grab_key_from_file(const char *file_name);
 
-int create_semaphore(const key_t key, int semaphore_starting_value);
+int semaphore_create(const key_t key, const int semaphore_starting_value);
 
-int get_semaphore(const key_t key);
+int semaphore_get(const key_t key);
 
-int delete_semaphore(int semaphore_id);
+int semaphore_delete(const int semaphore_id);
 
 
-int shm_create(key_t key, size_t size);
+int shm_create(const key_t key, const size_t size);
 
-int shm_open_existing(key_t key);
+int shm_get(const key_t key);
 
-void *shm_attach(int shmid);
+void *shm_attach(const int shm_id);
 
 int shm_detach(const void *addr);
 
-int shm_destroy(int shmid);
+int shm_destroy(const int shm_id);
+
 
 int SHM_DronInfo_add_dron(SHM_AllDronesData *p_shm_dron_info, Stack *free_space_stack, DronData *p_dron_state);
 

@@ -99,14 +99,14 @@ int main(int argc, char *argv[]) {
         print_error("Cant grab key");
     }
 
-    int shm_config_id = shm_open_existing(shm_config_key);
+    int shm_config_id = shm_get(shm_config_key);
     if (shm_config_id < 0) {
         print_error("Cant open shm");
         _exit(1);
     }
 
     SHM_Configuration *p_shm_config = shm_attach(shm_config_id);
-    int shm_config_semaphore_id = get_semaphore(shm_config_key);
+    int shm_config_semaphore_id = semaphore_get(shm_config_key);
 
     if (semop(shm_config_semaphore_id, &SEM_LOCK, 1) == -1) {
         print_error("While waiting for semaphore: semop -1");
@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
         _exit(1);
     }
 
-    int shm_dron_info_id = shm_open_existing(shm_dron_info_key);
+    int shm_dron_info_id = shm_get(shm_dron_info_key);
     if (shm_dron_info_id < 0) {
         print_error("Cant open shm");
         _exit(1);
@@ -147,11 +147,11 @@ int main(int argc, char *argv[]) {
         _exit(1);
     }
 
-    int shm_stack_id = shm_open_existing(shm_stack_key);
+    int shm_stack_id = shm_get(shm_stack_key);
     Stack* index_stack = shm_attach(shm_stack_id);
 
 
-    int shm_dron_info_semaphore_id = get_semaphore(shm_dron_info_key);
+    int shm_dron_info_semaphore_id = semaphore_get(shm_dron_info_key);
 
 
     struct sigaction sig_shutdown_request;

@@ -7,9 +7,9 @@
 
 #define DONT_CREAT_FILE 0
 
-int create_semaphore(const key_t key, int semaphore_starting_value) {
+int semaphore_create(const key_t key, const int semaphore_starting_value) {
     // Try to CREATE semaphore; fail if it exists
-    int semaphore_id = semget(key, 1, IPC_CREAT | IPC_EXCL | 0600);
+    const int semaphore_id = semget(key, 1, IPC_CREAT | IPC_EXCL | 0600);
     if (semaphore_id == -1) {
         // Semaphore already exists OR other error
         print_error("Failed to create a semaphore on key: %d, or it already existed", key);
@@ -23,14 +23,14 @@ int create_semaphore(const key_t key, int semaphore_starting_value) {
         print_error("Semaphore ID: %d, experienced an error", semaphore_id);
         return -1;
     }
-    print_msg("Semaphore ID: %d : 0 created, with starting value of: %d", semaphore_id, semaphore_starting_value);
+    print_msg("Semaphore ID: %d created, with starting value of: %d", semaphore_id, semaphore_starting_value);
 
     return semaphore_id;
 }
 
-int get_semaphore(const key_t key) {
+int semaphore_get(const key_t key) {
     // Try to CREATE semaphore; fail if it exists
-    int semaphore_id = semget(key, 1, 0600);
+    const int semaphore_id = semget(key, 1, 0600);
     if (semaphore_id == -1) {
         // Semaphore already exists OR other error
         print_error("Failed to get a semaphore on key: %d", semaphore_id);
@@ -40,7 +40,7 @@ int get_semaphore(const key_t key) {
     return semaphore_id;
 }
 
-int delete_semaphore(const int semaphore_id) {
+int semaphore_delete(const int semaphore_id) {
     if (semctl(semaphore_id, 0, IPC_RMID) == -1) {
         print_error("Failed to delete semaphore ID %d", semaphore_id);
         return -1;

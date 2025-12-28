@@ -161,15 +161,15 @@ int main(int argc, char *argv[]) {
         index--;
     }
 
-    int shm_config_semaphore_id = create_semaphore(shm_config_key, 1);
-    int shm_dron_info_semaphore_id = create_semaphore(shm_dron_info_key, 1);
+    int shm_config_semaphore_id = semaphore_create(shm_config_key, 1);
+    int shm_dron_info_semaphore_id = semaphore_create(shm_dron_info_key, 1);
 
     key_t gate_key = grab_key_from_file(GATE_KEY_FILE_NAME);
     if (gate_key < 0) {
         print_error("Cant grab key");
     }
 
-    int gate_semaphore_id = create_semaphore(gate_key, GATE_SEMAPHORE_STARTING_VALUE);
+    int gate_semaphore_id = semaphore_create(gate_key, GATE_SEMAPHORE_STARTING_VALUE);
 
 
     int operator_pid;
@@ -200,9 +200,9 @@ int main(int argc, char *argv[]) {
     shm_detach(p_shm_stack);
     shm_destroy(shm_stack_id);
 
-    delete_semaphore(shm_config_semaphore_id);
-    delete_semaphore(shm_dron_info_semaphore_id);
-    delete_semaphore(gate_semaphore_id);
+    semaphore_delete(shm_config_semaphore_id);
+    semaphore_delete(shm_dron_info_semaphore_id);
+    semaphore_delete(gate_semaphore_id);
 
     print_msg("Cleanup complete.");
     return 0;

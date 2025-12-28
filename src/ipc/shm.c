@@ -7,29 +7,29 @@
 
 #include "printer.h"
 
-int shm_create(key_t key, size_t size) {
-    int shmid = shmget(key, size, 0600 | IPC_CREAT | IPC_EXCL);
-    if (shmid == -1) {
+int shm_create(const key_t key, const size_t size) {
+    const int shm_id = shmget(key, size, 0600 | IPC_CREAT | IPC_EXCL);
+    if (shm_id == -1) {
         print_error("Failed to create sheared memory");
-        _exit(1);
-    }
-    return shmid;
-};
-
-int shm_open_existing(key_t key) {
-    int shmid = shmget(key, 0, 0600);
-    if (shmid == -1) {
-        print_error("shm_open_existing: shmget");
         return -1;
     }
-    return shmid;
+    return shm_id;
+};
+
+int shm_get(const key_t key) {
+    const int shm_id = shmget(key, 0, 0600);
+    if (shm_id == -1) {
+        print_error("Failed to open sheared memory");
+        return -1;
+    }
+    return shm_id;
 }
 
-void *shm_attach(int shmid) {
-    void *addr = shmat(shmid, NULL, 0);
+void *shm_attach(const int shm_id) {
+    void *addr = shmat(shm_id, NULL, 0);
 
     if (addr == (void *) -1) {
-        print_error("shm_attach: shmat");
+        print_error("Failed to attach sheared memory");
         return NULL;
     }
 
@@ -38,16 +38,16 @@ void *shm_attach(int shmid) {
 
 int shm_detach(const void *addr) {
     if (shmdt(addr) == -1) {
-        print_error("shm_detach: shmdt");
+        print_error("Failed to detach sheared memory");
         return -1;
     }
     return 0;
 }
 
-int shm_destroy(int shmid) {
+int shm_destroy(const int shm_id) {
     // Mark for deletion
-    if (shmctl(shmid, IPC_RMID, NULL) == -1) {
-        print_error("shm_destroy: shmctl(IPC_RMID)");
+    if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
+        print_error("Failed to destroy sheared memory");
         return -1;
     }
     return 0;

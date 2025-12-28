@@ -53,14 +53,14 @@ int main(int argc, char* argv[]) {
         print_error("Cant grab key");
     }
 
-    int shm_dron_info_id = shm_open_existing(shm_dron_info_key);
+    int shm_dron_info_id = shm_get(shm_dron_info_key);
     if (shm_dron_info_id < 0) {
         print_error("Cant open shm");
         _exit(1);
     }
 
     SHM_AllDronesData *p_shm_dron_info = shm_attach(shm_dron_info_id);
-    int shm_dron_info_semaphore_id = get_semaphore(shm_dron_info_key);
+    int shm_dron_info_semaphore_id = semaphore_get(shm_dron_info_key);
 
     print_msg("Started");
 

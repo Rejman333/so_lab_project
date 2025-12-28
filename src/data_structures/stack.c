@@ -65,3 +65,16 @@ int Stack_top(const Stack *stack, void *out) {
     memcpy(out, src, stack->elem_size);
     return STACK_SUCCESS;
 }
+
+size_t Stack_get_capacity(const Stack *stack) {
+    return stack->capacity;
+};
+
+size_t Stack_get_size(const Stack *stack) {
+    return stack->size;
+};
+
+size_t Stack_get_elem_size(const Stack *stack) {
+    return stack->elem_size;
+};
+

@@ -26,3 +26,10 @@ int Stack_push(Stack *stack, const void *elem);
 int Stack_pop(Stack *stack, void *out);
 
 int Stack_top(const Stack *stack, void *out);
+
+
+size_t Stack_get_capacity(const Stack *stack);
+
+size_t Stack_get_size(const Stack *stack);
+
+size_t Stack_get_elem_size(const Stack *stack);

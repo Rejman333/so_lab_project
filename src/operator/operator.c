@@ -30,7 +30,7 @@ void sigusr2_handler(int sig) {
 }
 
 int creat_dron(
-    const Location location, SHM_DronInfo *p_shm_dron_info, int shm_dron_info_semaphore_id, int max_loading_cycles) {
+    const DronData_Location location, SHM_AllDronesData *p_shm_dron_info, int shm_dron_info_semaphore_id, int max_loading_cycles) {
     int slot = -1;
 
     if (semop(shm_dron_info_semaphore_id, &SEM_LOCK, 1) == -1) {
@@ -40,10 +40,10 @@ int creat_dron(
 
     slot = p_shm_dron_info->dron_count;
 
-    p_shm_dron_info->dron_state_array[slot].pid = -1;
-    p_shm_dron_info->dron_state_array[slot].dron_location = location;
-    p_shm_dron_info->dron_state_array[slot].loading_cycles_left = max_loading_cycles;
-    p_shm_dron_info->dron_state_array[slot].last_update = time(NULL);
+    p_shm_dron_info->drones[slot].pid = -1;
+    p_shm_dron_info->drones[slot].dron_location = location;
+    p_shm_dron_info->drones[slot].loading_cycles_left = max_loading_cycles;
+    p_shm_dron_info->drones[slot].last_update = time(NULL);
 
     p_shm_dron_info->dron_count++;
     if (location == LOCATION_BASE)
@@ -77,7 +77,7 @@ int creat_dron(
     }
 
 
-    p_shm_dron_info->dron_state_array[slot].pid = dron_pid;
+    p_shm_dron_info->drones[slot].pid = dron_pid;
 
     if (semop(shm_dron_info_semaphore_id, &SEM_UNLOCK, 1) == -1) {
         print_error("Failed to close semaphore 2");
@@ -136,7 +136,7 @@ int main(int argc, char *argv[]) {
         _exit(1);
     }
 
-    SHM_DronInfo *p_shm_dron_info = shm_attach(shm_dron_info_id);
+    SHM_AllDronesData *p_shm_dron_info = shm_attach(shm_dron_info_id);
     int shm_dron_info_semaphore_id = get_semaphore(shm_dron_info_key);
 
     struct sigaction sig_shutdown_request;

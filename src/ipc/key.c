@@ -4,6 +4,7 @@
 #include <sys/ipc.h>
 
 #include "ipc.h"
+#include "printer.h"
 
 key_t grab_key_from_file(const char *file_name) {
     int fd = open(file_name, O_CREAT | O_RDWR, 0600);

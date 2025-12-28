@@ -6,6 +6,7 @@
 
 typedef struct {
     int starting_drones_count;
+    int maximum_drones_count;
     int resupply_interval;
     int maximum_charge_time;
     int max_loading_cycles;
@@ -15,14 +16,14 @@ typedef enum {
     LOCATION_UNDEFINE,
     LOCATION_BASE,
     LOCATION_MISSION
-} Location;
+} DronData_Location;
 
 typedef struct {
     pid_t pid;
-    Location dron_location;
+    DronData_Location dron_location;
     int loading_cycles_left;
     time_t last_update;
-} Dron_State;
+} DronData;
 
 typedef struct {
     int dron_count;
@@ -30,8 +31,8 @@ typedef struct {
     int missions_completed_count;
     int drone_lost_count;
 
-    Dron_State dron_state_array[];
-} SHM_DronInfo;
+    DronData drones[];
+} SHM_AllDronesData;
 
 union semun {
     int val;
@@ -62,10 +63,10 @@ int shm_detach(const void *addr);
 
 int shm_destroy(int shmid);
 
-int SHM_DronInfo_add_dron(SHM_DronInfo *p_shm_dron_info, Stack *free_space_stack, Dron_State *p_dron_state);
+int SHM_DronInfo_add_dron(SHM_AllDronesData *p_shm_dron_info, Stack *free_space_stack, DronData *p_dron_state);
 
-int SHM_DronInfo_mission_completed(SHM_DronInfo *p_shm_dron_info);
+int SHM_DronInfo_mission_completed(SHM_AllDronesData *p_shm_dron_info);
 
-int SHM_DronInfo_update_dron_location(SHM_DronInfo *p_shm_dron_info, int dron_index, Location new_dron_location);
+int SHM_DronInfo_update_dron_location(SHM_AllDronesData *p_shm_dron_info, int dron_index, DronData_Location new_dron_location);
 
-int SHM_DronInfo_delete_drone(SHM_DronInfo *p_shm_dron_info, Stack *free_space_stack, int dron_index);
+int SHM_DronInfo_delete_drone(SHM_AllDronesData *p_shm_dron_info, Stack *free_space_stack, int dron_index);

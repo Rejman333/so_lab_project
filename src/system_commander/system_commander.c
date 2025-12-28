@@ -59,7 +59,7 @@ int main(int argc, char* argv[]) {
         _exit(1);
     }
 
-    SHM_DronInfo *p_shm_dron_info = shm_attach(shm_dron_info_id);
+    SHM_AllDronesData *p_shm_dron_info = shm_attach(shm_dron_info_id);
     int shm_dron_info_semaphore_id = get_semaphore(shm_dron_info_key);
 
     print_msg("Started");
@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
         }
 
         print_msg(">>> Entered critical section");
-        print_msg("Dron pid: %d",p_shm_dron_info->dron_state_array[0].pid);
+        print_msg("Dron pid: %d",p_shm_dron_info->drones[0].pid);
 
         if (semop(shm_dron_info_semaphore_id, &SEM_UNLOCK, 1) == -1) {
             print_error("While leaving semaphore: semop +1");

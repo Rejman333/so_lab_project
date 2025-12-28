@@ -9,14 +9,17 @@
 #define COLOR_CYAN    "\033[36m"
 #define COLOR_WHITE   "\033[37m"
 
-
 void setup_print(const char* name, const char* color);
 
 __attribute__((format(printf, 1, 2)))
 void print_msg(const char* fmt, ...);
 
-__attribute__((format(printf, 1, 2)))
-void print_error(const char* fmt, ...);
-
 __attribute__((format(printf, 2, 3)))
 void print_msg_color(const char* color, const char* fmt, ...);
+
+__attribute__((format(printf, 4, 5)))
+void print_error_impl(const char *file, int line, const char *func,
+                      const char *fmt, ...);
+
+#define print_error(fmt, ...) \
+print_error_impl(__FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__)

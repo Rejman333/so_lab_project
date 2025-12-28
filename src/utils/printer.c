@@ -1,9 +1,11 @@
 #include "printer.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <time.h>
 #include <stdarg.h>
+#include <string.h>
 
 #define BUFFER_SIZE 1024
 
@@ -61,20 +63,40 @@ void print_internal(int output, const char *color, const char *fmt, va_list args
 void print_msg(const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    print_internal(STDOUT_FILENO,PROCESS_COLOR, fmt, args);
+    print_internal(STDOUT_FILENO, PROCESS_COLOR, fmt, args);
     va_end(args);
 }
 
-void print_error(const char *fmt, ...) {
+// void print_error(const char *fmt, ...) {
+//     const int error_code = errno;
+//
+//     char new_fmt[BUFFER_SIZE];
+//     snprintf(new_fmt, sizeof(new_fmt), "%s: %s", fmt, strerror(error_code));
+//
+//     va_list args;
+//     va_start(args, fmt);
+//     print_internal(STDERR_FILENO, COLOR_RED, new_fmt, args);
+//     va_end(args);
+// }
+
+void print_error_impl(const char *file, int line, const char *func, const char *fmt, ...) {
+    const int error_code = errno;
+
+    char new_fmt[BUFFER_SIZE];
+    snprintf(new_fmt, sizeof(new_fmt),
+             "%s:%d %s() | %s: %s",
+             file, line, func, fmt, strerror(error_code));
+
     va_list args;
     va_start(args, fmt);
-    print_internal(STDERR_FILENO,COLOR_RED, fmt, args);
+    print_internal(STDERR_FILENO, COLOR_RED, new_fmt, args);
     va_end(args);
-};
+}
+
 
 void print_msg_color(const char *color, const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    print_internal(STDOUT_FILENO,color, fmt, args);
+    print_internal(STDOUT_FILENO, color, fmt, args);
     va_end(args);
 }

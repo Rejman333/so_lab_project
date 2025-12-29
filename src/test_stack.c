@@ -1,34 +1,19 @@
+#include "data_structures/stack.h"
+#include "ipc/ipc.h"
 #include "printer.h"
-#include <sys/shm.h>
-#include <errno.h>
 
-// Zakładam, że masz te wrappery:
-int shm_create(key_t key, size_t size);
-void shm_destroy(int shm_id);
-void *shm_attach(int shm_id);
+#include <stdlib.h>
+#include <unistd.h>
 
-int main(void) {
+
+int main() {
     setup_print("test", COLOR_GREEN);
+    int semaphore_id = semaphore_create(1,0);
+    int shm_id = shm_create(1,20);
 
-    // 1) Stwórz SHM
-    int shm_id = shm_create(1, 20);
-    if (shm_id == -1) {
-        print_error("shm_create failed");
-        return 1;
-    }
+    print_msg("Semaphore id %d", semaphore_id);
+    print_msg("Shm id: %d", shm_id);
 
-    // 2) Usuń SHM
     shm_destroy(shm_id);
-
-    // 3) Spróbuj się do niego podpiąć -> shmat powinno zwrócić (void*)-1
-    void *p = shm_attach(shm_id);
-    if (!p) {
-        // Tu powinien zadziałać Twój print_error z errno
-        print_error("shm_attach after destroy failed (expected)");
-        return 0;
-    }
-
-    // Jeśli jakimś cudem się nie wywaliło, to wymuś błąd dereferencją
-    *(volatile int*)p = 123; // prawdopodobnie SIGSEGV
-    return 0;
+    semaphore_delete(semaphore_id);
 }

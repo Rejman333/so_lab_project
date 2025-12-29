@@ -8,6 +8,8 @@ typedef struct {
     int starting_drones_count;
     int maximum_drones_count;
     int resupply_interval;
+
+    int next_dron_id;
     int maximum_charge_time;
     int max_loading_cycles;
 } SHM_Configuration;
@@ -20,8 +22,8 @@ typedef enum {
 
 typedef struct {
     int id;
+    int pid;
     DronData_Location location;
-    int loading_cycles_left;
 } DronData;
 
 typedef struct {

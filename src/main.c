@@ -23,7 +23,7 @@
 #define MAXIMUM_CHARGE_TIME_DEFAULT 10000000
 #define MAXIMUM_LOADING_CYCLES 5
 
-#define MAXIMUM_DRONES_IN_MEMORY 1000
+#define MAXIMUM_DRONES_IN_MEMORY 30
 
 void process_argv(SHM_Configuration *p_configuration, int argc, char *argv[]) {
     if (argc > 1) {
@@ -123,10 +123,11 @@ int create_shm_config(SHM_Configuration **out_cfg, int *out_sem_id) {
     }
 
     *cfg = (SHM_Configuration){
+        .next_dron_id = 0,
         .starting_drones_count = STARTING_DRONE_COUNT_DEFAULT,
         .resupply_interval = RESUPPLY_INTERVAL_DEFAULT,
         .maximum_charge_time = MAXIMUM_CHARGE_TIME_DEFAULT,
-        .max_loading_cycles = MAXIMUM_LOADING_CYCLES
+        .max_loading_cycles = MAXIMUM_LOADING_CYCLES,
     };
 
     *out_cfg = cfg;

@@ -71,7 +71,7 @@ int get_initial_configuration(OperatorConfiguration *out_config) {
     return 0;
 }
 
-int create_shm_all_drones_data(SHM_AllDronesData **out_data, Stack **out_stack, int *out_stack_id, int *out_sem_id) {
+int get_shm_all_drones_data(SHM_AllDronesData **out_data, Stack **out_stack, int *out_stack_id, int *out_sem_id) {
     if (!out_data || !out_sem_id) return -1;
 
     const key_t shm_all_drones_data_key = grab_key_from_file(ALL_DRONES_DATA_FILE_NAME);
@@ -126,7 +126,7 @@ int creat_dron(const DronData_Location location) {
         );
 
         print_error("exec dron");
-        _exit(1);
+        exit(1);
     }
     return dron_pid;
 }
@@ -156,10 +156,10 @@ int main(int argc, char *argv[]) {
     int shm_stack_id = -1;
     int shm_all_drones_data_semaphore_id = -1;
 
-    const int shm_all_drones_data_id = create_shm_all_drones_data(&shm_all_drones_data,
-                                                                  &shm_stack,
-                                                                  &shm_stack_id,
-                                                                  &shm_all_drones_data_semaphore_id);
+    const int shm_all_drones_data_id = get_shm_all_drones_data(&shm_all_drones_data,
+                                                               &shm_stack,
+                                                               &shm_stack_id,
+                                                               &shm_all_drones_data_semaphore_id);
     if (shm_all_drones_data_id == EXIT_FAILURE) {
         // Todo handle error
     }
@@ -203,6 +203,30 @@ int main(int argc, char *argv[]) {
             local_configuration.max_drones_on_platform /= 2;
             print_msg("Decreased max_drones_on_platform to %d", local_configuration.max_drones_on_platform);
         }
+
+        if (semop(shm_all_drones_data_semaphore_id, &SEM_LOCK, 1) == -1) {
+            print_error("While waiting for semaphore: semop -1");
+            return -1;
+        }
+
+        print_msg("Drones in base: %d, max drones in base %d, drones on missions %d",
+                  shm_all_drones_data->dron_in_base_count,
+                  local_configuration.max_drones_on_platform,
+                  shm_all_drones_data->dron_count - shm_all_drones_data->dron_in_base_count);
+
+        if (shm_all_drones_data->dron_in_base_count < local_configuration.max_drones_on_platform) {
+            if (creat_dron(LOCATION_BASE) < 0) {
+                print_error("Failed to creat a drone");
+            };
+        }
+
+
+        if (semop(shm_all_drones_data_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+            print_error("While waiting for semaphore: semop -1");
+            return -1;
+        }
+
+        usleep(local_configuration.resupply_interval);
     }
 
 

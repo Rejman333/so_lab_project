@@ -22,10 +22,16 @@ typedef struct {
     int my_index;
     int maximum_charge_time;
     int loading_cycles_left;
+
+    int mission_time;
+    int current_charge_time;
 } DronInternalData;
 
 static volatile sig_atomic_t got_sigusr1 = 0;
 static volatile sig_atomic_t got_shutdown_requested = 0;
+
+static volatile int battery_percentage = 100;
+
 
 
 void sig_end_handler(int sig) {
@@ -91,7 +97,7 @@ int get_gate_semaphore() {
     return gate_semaphore_id;
 }
 
-int get_initial_configuration(DronInternalData *out_config) {
+int get_initial_configuration(DronInternalData *out_config, const DronData_Location starting_location) {
     const key_t shm_config_key = grab_key_from_file(CONFIG_KEY_FILE_NAME);
     if (shm_config_key < 0) {
         print_error("Cant grab key");
@@ -123,6 +129,15 @@ int get_initial_configuration(DronInternalData *out_config) {
     shm_detach(p_shm_config);
     out_config->my_index = -1;
 
+    if (starting_location == LOCATION_MISSION) out_config->mission_time = get_random_mission_time(5000, 15000);
+
+    return 0;
+}
+
+int battery() {
+    // while (1) {
+    //     if ()
+    // }
     return 0;
 }
 
@@ -135,11 +150,11 @@ int main(int argc, char *argv[]) {
         print_error("No location argument");
         exit(1);
     }
-    DronData_Location starting_location = atoi(argv[1]);
+    const DronData_Location starting_location = atoi(argv[1]);
 
 
     DronInternalData my_data;
-    if (get_initial_configuration(&my_data) == EXIT_FAILURE) {
+    if (get_initial_configuration(&my_data, starting_location) == -1) {
         print_error("Failed to initiate configuration");
     }
 
@@ -198,8 +213,9 @@ int main(int argc, char *argv[]) {
         print_error("While waiting for semaphore: semop -1");
         return -1;
     }
-    print_msg("Started with id: %d, with index of: %d", my_data.my_id, my_data.my_index);
 
+
+    print_msg("Started with id: %d, with index of: %d", my_data.my_id, my_data.my_index);
 
     while (!got_shutdown_requested) {
         if (got_sigusr1) {
@@ -216,8 +232,7 @@ int main(int argc, char *argv[]) {
             }
 
             print_msg_color(COLOR_RED, "Dron with id: %d Suicided", my_data.my_id);
-            return(0);
-
+            return (0);
         }
         sleep(3);
     }

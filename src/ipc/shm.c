@@ -75,6 +75,7 @@ int SHM_AllDronesData_update_dron_location(SHM_AllDronesData *p_shm_all_drones_d
                                       DronData_Location new_dron_location) {
     const DronData_Location old_location = p_shm_all_drones_data->drones[dron_index].location;
     if (old_location == LOCATION_BASE) p_shm_all_drones_data->dron_in_base_count--;
+    if (old_location == LOCATION_MISSION)  p_shm_all_drones_data->dron_in_base_count++;
     p_shm_all_drones_data->drones[dron_index].location = new_dron_location;
     return 0;
 };

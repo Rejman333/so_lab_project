@@ -18,12 +18,12 @@
 
 #define GATE_SEMAPHORE_STARTING_VALUE 2
 
-#define STARTING_DRONE_COUNT_DEFAULT 10
+#define STARTING_DRONE_COUNT_DEFAULT 4
 #define RESUPPLY_INTERVAL_DEFAULT 1000000
 #define MAXIMUM_CHARGE_TIME_DEFAULT 10000000
 #define MAXIMUM_LOADING_CYCLES 5
 
-#define MAXIMUM_DRONES_IN_MEMORY 30
+#define MAXIMUM_DRONES_IN_MEMORY 10
 
 void process_argv(SHM_Configuration *p_configuration, int argc, char *argv[]) {
     if (argc > 1) {

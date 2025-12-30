@@ -3,15 +3,13 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <stdlib.h>
-#include <fcntl.h>
-#include <time.h>
 #include <sys/wait.h>
 
 #include "ipc.h"
 #include "printer.h"
 
 #define CONFIG_KEY_FILE_NAME "config_key"
-#define DRON_INFO_KEY_FILE_NAME "dron_info_key"
+#define ALL_DRONES_DATA_FILE_NAME "dron_info_key"
 #define STACK_KEY_FILE_NAME "stack_key"
 #define GATE_KEY_FILE_NAME "gate_key"
 
@@ -25,7 +23,7 @@
 #define MAXIMUM_CHARGE_TIME_DEFAULT 10000000
 #define MAXIMUM_LOADING_CYCLES 5
 
-#define MAXIMUM_DRONES_IN_MEMORY 1000
+#define MAXIMUM_DRONES_IN_MEMORY 30
 
 void process_argv(SHM_Configuration *p_configuration, int argc, char *argv[]) {
     if (argc > 1) {
@@ -103,38 +101,59 @@ int creat_system_commander() {
     return pid;
 }
 
-int main(int argc, char *argv[]) {
-    setup_print(PROCESS_NAME, PROCESS_COLOR);
-    signal(SIGINT, SIG_IGN);
+int create_shm_config(SHM_Configuration **out_cfg, int *out_sem_id) {
+    if (!out_cfg || !out_sem_id) return -1;
 
-
-    //Setting up shm for config
-    key_t shm_config_key = grab_key_from_file(CONFIG_KEY_FILE_NAME);
-    if (shm_config_key < 0) {
+    key_t key = grab_key_from_file(CONFIG_KEY_FILE_NAME);
+    if (key < 0) {
         print_error("Cant grab key");
+        return -1;
     }
-    int shm_config_id = shm_create(shm_config_key, sizeof(SHM_Configuration));
-    SHM_Configuration *p_shm_config = shm_attach(shm_config_id);
-    *p_shm_config = (SHM_Configuration){
+
+    int shm_id = shm_create(key, sizeof(SHM_Configuration));
+    if (shm_id == -1) {
+        print_error("Cant create shm");
+        return -1;
+    }
+
+    SHM_Configuration *cfg = shm_attach(shm_id);
+    if (!cfg) {
+        print_error("Cant attach shm");
+        return -1;
+    }
+
+    *cfg = (SHM_Configuration){
+        .next_dron_id = 0,
         .starting_drones_count = STARTING_DRONE_COUNT_DEFAULT,
         .resupply_interval = RESUPPLY_INTERVAL_DEFAULT,
         .maximum_charge_time = MAXIMUM_CHARGE_TIME_DEFAULT,
-        .max_loading_cycles = MAXIMUM_LOADING_CYCLES
+        .max_loading_cycles = MAXIMUM_LOADING_CYCLES,
     };
 
-    process_argv(p_shm_config, argc, argv);
-    print_configuration(p_shm_config);
-
-    //Setting up shm for dron_info
-    key_t shm_dron_info_key = grab_key_from_file(DRON_INFO_KEY_FILE_NAME);
-    if (shm_dron_info_key < 0) {
-        print_error("Cant grab key");
+    *out_cfg = cfg;
+    *out_sem_id = semaphore_create(key, 1);
+    if (*out_sem_id == -1) {
+        print_error("Cant create semaphore");
+        return -1;
     }
-    size_t bytes_needed = sizeof(SHM_AllDronesData) + MAXIMUM_DRONES_IN_MEMORY * sizeof(DronData);
-    int shm_dron_info_id = shm_create(shm_dron_info_key, bytes_needed);
 
-    SHM_AllDronesData *p_shm_dron_info = shm_attach(shm_dron_info_id);
-    *p_shm_dron_info = (SHM_AllDronesData){
+    return shm_id;
+}
+
+int create_shm_all_drones_data(SHM_AllDronesData **out_data, Stack **out_stack, int *out_stack_id, int *out_sem_id) {
+    if (!out_data || !out_sem_id) return -1;
+
+    key_t shm_all_drones_data_key = grab_key_from_file(ALL_DRONES_DATA_FILE_NAME);
+    if (shm_all_drones_data_key < 0) {
+        print_error("Cant grab key");
+        return -1;
+    }
+
+    size_t bytes_needed = sizeof(SHM_AllDronesData) + MAXIMUM_DRONES_IN_MEMORY * sizeof(DronData);
+    const int shm_all_drones_data_id = shm_create(shm_all_drones_data_key, bytes_needed);
+
+    SHM_AllDronesData *p_shm_all_drones_data = shm_attach(shm_all_drones_data_id);
+    *p_shm_all_drones_data = (SHM_AllDronesData){
         .dron_in_base_count = 0,
         .drone_lost_count = 0,
         .missions_completed_count = 0,
@@ -143,12 +162,12 @@ int main(int argc, char *argv[]) {
 
     bytes_needed = Stack_bytes_needed(MAXIMUM_DRONES_IN_MEMORY, sizeof(int));
 
-    key_t shm_stack_key = grab_key_from_file(STACK_KEY_FILE_NAME);
+    const key_t shm_stack_key = grab_key_from_file(STACK_KEY_FILE_NAME);
     if (shm_stack_key < 0) {
         print_error("Cant grab key");
     }
-    int shm_stack_id = shm_create(shm_stack_key, bytes_needed);
-    Stack *p_shm_stack = shm_attach(shm_dron_info_id);
+    const int shm_stack_id = shm_create(shm_stack_key, bytes_needed);
+    Stack *p_shm_stack = shm_attach(shm_stack_id);
     Stack_init(p_shm_stack, MAXIMUM_DRONES_IN_MEMORY, sizeof(int));
     if (!p_shm_stack) {
         print_error("Stack Failed with initialization");
@@ -161,25 +180,70 @@ int main(int argc, char *argv[]) {
         index--;
     }
 
-    int shm_config_semaphore_id = create_semaphore(shm_config_key, 1);
-    int shm_dron_info_semaphore_id = create_semaphore(shm_dron_info_key, 1);
+    *out_sem_id = semaphore_create(shm_all_drones_data_key, 1);
+    *out_data = p_shm_all_drones_data;
+    *out_stack = p_shm_stack;
+    *out_stack_id = shm_stack_id;
 
-    key_t gate_key = grab_key_from_file(GATE_KEY_FILE_NAME);
+    return shm_all_drones_data_id;
+}
+
+int create_gate_semaphore() {
+    const key_t gate_key = grab_key_from_file(GATE_KEY_FILE_NAME);
     if (gate_key < 0) {
         print_error("Cant grab key");
+        return -1;
     }
 
-    int gate_semaphore_id = create_semaphore(gate_key, GATE_SEMAPHORE_STARTING_VALUE);
+    const int gate_semaphore_id = semaphore_create(gate_key, GATE_SEMAPHORE_STARTING_VALUE);
+    return gate_semaphore_id;
+}
+
+int main(int argc, char *argv[]) {
+    setup_print(PROCESS_NAME, PROCESS_COLOR);
+    signal(SIGINT, SIG_IGN);
 
 
-    int operator_pid;
-    if ((operator_pid = creat_operator()) < 0) {
-        print_error("Operator process failed to start");
+    //Setting up shm for config
+    SHM_Configuration *shm_configuration = NULL;
+    int shm_config_semaphore_id = -1;
+
+    const int shm_configuration_id = create_shm_config(&shm_configuration, &shm_config_semaphore_id);
+    if (shm_configuration_id == EXIT_FAILURE) {
+        // Todo handle error
+    }
+    process_argv(shm_configuration, argc, argv);
+    print_configuration(shm_configuration);
+
+    //Setting up shm for dron_info
+    SHM_AllDronesData *shm_all_drones_data = NULL;
+    Stack *shm_stack = NULL;
+    int shm_stack_id = -1;
+    int shm_all_drones_data_semaphore_id = -1;
+
+    const int shm_all_drones_data_id = create_shm_all_drones_data(&shm_all_drones_data,
+                                                                  &shm_stack,
+                                                                  &shm_stack_id,
+                                                                  &shm_all_drones_data_semaphore_id);
+    if (shm_all_drones_data_id == EXIT_FAILURE) {
+        // Todo handle error
     }
 
-    // int system_commander_pid;
-    // if ((system_commander_pid = creat_system_commander()) < 0) {
-    //     print_error("System commander process failed to start");
+
+    const int gate_semaphore_id = create_gate_semaphore();
+    if (gate_semaphore_id == EXIT_FAILURE) {
+        // Todo handle error
+    }
+
+
+    const int operator_pid = creat_operator();
+    if ((operator_pid) < 0) {
+        // Todo handle error
+    }
+
+    // const int system_commander_pid = creat_system_commander();
+    // if (system_commander_pid < 0) {
+    //     // Todo handle error
     // }
 
     print_msg("Waiting for children...");
@@ -191,18 +255,18 @@ int main(int argc, char *argv[]) {
     print_msg("Operator joined");
 
 
-    shm_detach(p_shm_config);
-    shm_destroy(shm_config_id);
+    shm_detach(shm_configuration);
+    shm_destroy(shm_configuration_id);
 
-    shm_detach(p_shm_dron_info);
-    shm_destroy(shm_dron_info_id);
+    shm_detach(shm_all_drones_data);
+    shm_destroy(shm_all_drones_data_id);
 
-    shm_detach(p_shm_stack);
+    shm_detach(shm_stack);
     shm_destroy(shm_stack_id);
 
-    delete_semaphore(shm_config_semaphore_id);
-    delete_semaphore(shm_dron_info_semaphore_id);
-    delete_semaphore(gate_semaphore_id);
+    semaphore_delete(shm_config_semaphore_id);
+    semaphore_delete(shm_all_drones_data_semaphore_id);
+    semaphore_delete(gate_semaphore_id);
 
     print_msg("Cleanup complete.");
     return 0;

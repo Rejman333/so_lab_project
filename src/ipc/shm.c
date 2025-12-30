@@ -7,29 +7,29 @@
 
 #include "printer.h"
 
-int shm_create(key_t key, size_t size) {
-    int shmid = shmget(key, size, 0600 | IPC_CREAT | IPC_EXCL);
-    if (shmid == -1) {
+int shm_create(const key_t key, const size_t size) {
+    const int shm_id = shmget(key, size, 0600 | IPC_CREAT | IPC_EXCL);
+    if (shm_id == -1) {
         print_error("Failed to create sheared memory");
-        _exit(1);
-    }
-    return shmid;
-};
-
-int shm_open_existing(key_t key) {
-    int shmid = shmget(key, 0, 0600);
-    if (shmid == -1) {
-        print_error("shm_open_existing: shmget");
         return -1;
     }
-    return shmid;
+    return shm_id;
+};
+
+int shm_get(const key_t key) {
+    const int shm_id = shmget(key, 0, 0600);
+    if (shm_id == -1) {
+        print_error("Failed to open sheared memory");
+        return -1;
+    }
+    return shm_id;
 }
 
-void *shm_attach(int shmid) {
-    void *addr = shmat(shmid, NULL, 0);
+void *shm_attach(const int shm_id) {
+    void *addr = shmat(shm_id, NULL, 0);
 
     if (addr == (void *) -1) {
-        print_error("shm_attach: shmat");
+        print_error("Failed to attach sheared memory");
         return NULL;
     }
 
@@ -38,51 +38,54 @@ void *shm_attach(int shmid) {
 
 int shm_detach(const void *addr) {
     if (shmdt(addr) == -1) {
-        print_error("shm_detach: shmdt");
+        print_error("Failed to detach sheared memory");
         return -1;
     }
     return 0;
 }
 
-int shm_destroy(int shmid) {
+int shm_destroy(const int shm_id) {
     // Mark for deletion
-    if (shmctl(shmid, IPC_RMID, NULL) == -1) {
-        print_error("shm_destroy: shmctl(IPC_RMID)");
+    if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
+        print_error("Failed to destroy sheared memory");
         return -1;
     }
     return 0;
 }
 
-int SHM_DronInfo_add_dron(SHM_AllDronesData *p_shm_dron_info, Stack *free_space_stack, DronData *p_dron_state) {
+int SHM_AllDronesData_add_dron(SHM_AllDronesData *p_shm_all_drones_data, Stack *free_space_stack, DronData *p_dron_data) {
     int out = -1;
     if (Stack_pop(free_space_stack, &out) == STACK_ERROR) return -1;
 
-    p_shm_dron_info->dron_count++;
-    if (p_dron_state->dron_location == LOCATION_BASE) p_shm_dron_info->dron_in_base_count++;
-    memcpy(&p_shm_dron_info->drones[out], p_dron_state, sizeof(DronData));
+    p_shm_all_drones_data->dron_count++;
+
+    if (p_dron_data->location == LOCATION_BASE) p_shm_all_drones_data->dron_in_base_count++;
+
+    memcpy(&p_shm_all_drones_data->drones[out], p_dron_data, sizeof(DronData));
 
     return out;
 };
 
-int SHM_DronInfo_mission_completed(SHM_AllDronesData *p_shm_dron_info) {
-    p_shm_dron_info->missions_completed_count++;
-    return p_shm_dron_info->missions_completed_count;
+int SHM_AllDronesData_mission_completed(SHM_AllDronesData *p_shm_all_drones_data) {
+    p_shm_all_drones_data->missions_completed_count++;
+    return p_shm_all_drones_data->missions_completed_count;
 };
 
-int SHM_DronInfo_update_dron_location(SHM_AllDronesData *p_shm_dron_info, int dron_index, DronData_Location new_dron_location) {
-    DronData_Location old_location = p_shm_dron_info->drones[dron_index].dron_location;
-    if (old_location == LOCATION_BASE) p_shm_dron_info->dron_in_base_count--;
-    p_shm_dron_info->drones[dron_index].dron_location = new_dron_location;
+int SHM_AllDronesData_update_dron_location(SHM_AllDronesData *p_shm_all_drones_data, const int dron_index,
+                                      DronData_Location new_dron_location) {
+    const DronData_Location old_location = p_shm_all_drones_data->drones[dron_index].location;
+    if (old_location == LOCATION_BASE) p_shm_all_drones_data->dron_in_base_count--;
+    p_shm_all_drones_data->drones[dron_index].location = new_dron_location;
     return 0;
 };
 
-int SHM_DronInfo_delete_drone(SHM_AllDronesData *p_shm_dron_info, Stack *free_space_stack, int dron_index) {
-    p_shm_dron_info->dron_count--;
-    p_shm_dron_info->drone_lost_count++;
-    if (p_shm_dron_info->drones[dron_index].dron_location == LOCATION_BASE) {
-        p_shm_dron_info->dron_in_base_count--;
+int SHM_AllDronesData_delete_drone(SHM_AllDronesData *p_shm_all_drones_data, Stack *free_space_stack, const int dron_index) {
+    p_shm_all_drones_data->dron_count--;
+    p_shm_all_drones_data->drone_lost_count++;
+    if (p_shm_all_drones_data->drones[dron_index].location == LOCATION_BASE) {
+        p_shm_all_drones_data->dron_in_base_count--;
     }
-    p_shm_dron_info->drones[dron_index].dron_location = LOCATION_UNDEFINE;
+    p_shm_all_drones_data->drones[dron_index].location = LOCATION_UNDEFINE;
 
     if (Stack_push(free_space_stack, &dron_index) == STACK_ERROR) return -1;
 

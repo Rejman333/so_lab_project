@@ -66,10 +66,6 @@ int SHM_AllDronesData_add_dron(SHM_AllDronesData *p_shm_all_drones_data, Stack *
     return out;
 };
 
-int SHM_AllDronesData_mission_completed(SHM_AllDronesData *p_shm_all_drones_data) {
-    p_shm_all_drones_data->missions_completed_count++;
-    return p_shm_all_drones_data->missions_completed_count;
-};
 
 int SHM_AllDronesData_update_dron_location(SHM_AllDronesData *p_shm_all_drones_data, const int dron_index,
                                       DronData_Location new_dron_location) {

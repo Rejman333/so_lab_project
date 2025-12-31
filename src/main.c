@@ -20,8 +20,8 @@
 
 #define STARTING_DRONE_COUNT_DEFAULT 4
 #define RESUPPLY_INTERVAL_DEFAULT 1000000
-#define MAXIMUM_CHARGE_TIME_DEFAULT 10000000
-#define MAXIMUM_LOADING_CYCLES 5
+#define MAXIMUM_CHARGE_TIME_DEFAULT 4000000
+#define MAXIMUM_LOADING_CYCLES 3
 
 #define MAXIMUM_DRONES_IN_MEMORY 10
 
@@ -156,7 +156,6 @@ int create_shm_all_drones_data(SHM_AllDronesData **out_data, Stack **out_stack, 
     *p_shm_all_drones_data = (SHM_AllDronesData){
         .dron_in_base_count = 0,
         .drone_lost_count = 0,
-        .missions_completed_count = 0,
         .dron_count = 0
     };
 

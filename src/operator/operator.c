@@ -7,6 +7,10 @@
 #include "ipc.h"
 #include "printer.h"
 
+
+//[22:21:26] [Operator (PID=4417)] /mnt/c/Users/jansw/CLionProjects/so_lab_project/src/operator/operator.c:208 main() | While waiting for semaphore: semop -1: Interrupted system call
+
+
 #define CONFIG_KEY_FILE_NAME "config_key"
 #define ALL_DRONES_DATA_FILE_NAME "dron_info_key"
 #define STACK_KEY_FILE_NAME "stack_key"
@@ -147,7 +151,7 @@ int main(int argc, char *argv[]) {
 
     OperatorConfiguration local_configuration;
 
-    if (get_initial_configuration(&local_configuration) == EXIT_FAILURE) {
+    if (get_initial_configuration(&local_configuration) == -1) {
         //Todo
     }
 

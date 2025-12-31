@@ -29,7 +29,6 @@ typedef struct {
 typedef struct {
     int dron_count;
     int dron_in_base_count;
-    int missions_completed_count;
     int drone_lost_count;
 
     DronData drones[];
@@ -70,8 +69,6 @@ int shm_destroy(const int shm_id);
 
 
 int SHM_AllDronesData_add_dron(SHM_AllDronesData *p_shm_all_drones_data, Stack *free_space_stack, DronData *p_dron_data);
-
-int SHM_AllDronesData_mission_completed(SHM_AllDronesData *p_shm_all_drones_data);
 
 int SHM_AllDronesData_update_dron_location(SHM_AllDronesData *p_shm_all_drones_data, int dron_index, DronData_Location new_dron_location);
 

@@ -284,11 +284,11 @@ int force_leave_base(SHM_AllDronesData *shm_all_drones_data, DronInternalData *m
 void describe_self(const DronInternalData *my_data) {
     pthread_mutex_lock(&m);
     print_msg(
-        "ID: %3d | Battery: %3d%% | Cycles: %3d | Location: %3d",
+        "ID: %3d | Battery: %3d%%[%2d] | %s",
         my_data->my_id,
         battery_percentage,
         my_data->loading_cycles_left,
-        my_data->location
+        DronData_LocationToString(my_data->location)
     );
     pthread_mutex_unlock(&m);
 }

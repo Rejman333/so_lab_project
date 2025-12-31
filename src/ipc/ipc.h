@@ -17,6 +17,8 @@ typedef struct {
 typedef enum {
     LOCATION_UNDEFINE,
     LOCATION_BASE,
+    LOCATION_LEAVING_BASE,
+    LOCATION_ENTERING_BASE,
     LOCATION_MISSION
 } DronData_Location;
 
@@ -43,6 +45,8 @@ union semun {
 
 #define SEM_LOCK   ((struct sembuf){0, -1, 0})
 #define SEM_UNLOCK ((struct sembuf){0, +1, 0})
+
+const char* DronData_LocationToString(const DronData_Location location);
 
 /*
  * No critical section is required because the file is used only as a stable anchor for ftok();

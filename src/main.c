@@ -12,6 +12,7 @@
 #define ALL_DRONES_DATA_FILE_NAME "dron_info_key"
 #define STACK_KEY_FILE_NAME "stack_key"
 #define GATE_KEY_FILE_NAME "gate_key"
+#define BASE_SLOTS_KEY_FILE_NAME "base_slots_key"
 
 #define PROCESS_NAME "Main"
 #define PROCESS_COLOR COLOR_BLUE
@@ -198,6 +199,17 @@ int create_gate_semaphore() {
     return gate_semaphore_id;
 }
 
+int create_base_slots_semaphore() {
+    const key_t base_slots_key = grab_key_from_file(BASE_SLOTS_KEY_FILE_NAME);
+    if (base_slots_key < 0) {
+        print_error("Cant grab key");
+        return -1;
+    }
+
+    const int base_slots_semaphore_id = semaphore_create(base_slots_key, 0);
+    return base_slots_semaphore_id;
+}
+
 int main(int argc, char *argv[]) {
     setup_print(PROCESS_NAME, PROCESS_COLOR);
     signal(SIGINT, SIG_IGN);
@@ -234,6 +246,11 @@ int main(int argc, char *argv[]) {
         // Todo handle error
     }
 
+    const int base_slots_semaphore_id = create_base_slots_semaphore();
+    if (gate_semaphore_id == EXIT_FAILURE) {
+        // Todo handle error
+    }
+
 
     const int operator_pid = creat_operator();
     if ((operator_pid) < 0) {
@@ -266,6 +283,7 @@ int main(int argc, char *argv[]) {
     semaphore_delete(shm_config_semaphore_id);
     semaphore_delete(shm_all_drones_data_semaphore_id);
     semaphore_delete(gate_semaphore_id);
+    semaphore_delete(base_slots_semaphore_id);
 
     print_msg("Cleanup complete.");
     return 0;

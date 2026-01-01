@@ -3,6 +3,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <sys/wait.h>
 
 #include "ipc.h"
 #include "printer.h"
@@ -31,6 +32,7 @@ static volatile sig_atomic_t got_shutdown_requested = 0;
 
 void shutdown_request_handler(int sig) {
     got_shutdown_requested = 1;
+    print_msg_color(COLOR_RED, "Reser Requested %d", sig);
 }
 
 void sigusr1_handler(int sig) {
@@ -57,7 +59,7 @@ int get_initial_configuration(OperatorConfiguration *out_config) {
     SHM_Configuration *p_shm_config = shm_attach(shm_config_id);
     const int shm_config_semaphore_id = semaphore_get(shm_config_key);
 
-    if (semop(shm_config_semaphore_id, &SEM_LOCK, 1) == -1) {
+    if (semaphore_lock(shm_config_semaphore_id) == -1) {
         print_error("While waiting for semaphore: semop -1");
         return -1;
     }
@@ -65,7 +67,7 @@ int get_initial_configuration(OperatorConfiguration *out_config) {
     out_config->starting_drones_count = p_shm_config->starting_drones_count;
     out_config->resupply_interval = p_shm_config->resupply_interval;
 
-    if (semop(shm_config_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+    if (semaphore_unlock(shm_config_semaphore_id) == -1) {
         print_error("While leaving semaphore: semop +1");
         return -1;
     }
@@ -148,19 +150,21 @@ int generate_starting_drones(const int number_of_drones_to_create) {
 }
 
 int describe_self(const SHM_AllDronesData *shm_all_drones_data, const int shm_all_drones_data_semaphore_id,
-                   const OperatorConfiguration *local_configuration) {
+                   const OperatorConfiguration *local_configuration, const int base_slots_semaphore_id) {
 
-    if (semop(shm_all_drones_data_semaphore_id, &SEM_LOCK, 1) == -1) {
+    if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
         print_error("While waiting for semaphore: semop -1");
         return -1;
     }
 
-    print_msg("Drones in base: [%d/%d] | Drones on missions [%d]",
+    int val = semctl(base_slots_semaphore_id, 0, GETVAL);
+    print_msg("Drones in base: [%d/%d] | Drones on missions [%d] | Semaphore value [%d]",
               shm_all_drones_data->dron_in_base_count,
               local_configuration->max_drones_on_platform,
-              shm_all_drones_data->dron_count - shm_all_drones_data->dron_in_base_count);
+              shm_all_drones_data->dron_count - shm_all_drones_data->dron_in_base_count,
+              val);
 
-    if (semop(shm_all_drones_data_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+    if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
         print_error("While waiting for semaphore: semop -1");
         return -1;
     }
@@ -204,13 +208,11 @@ int main(int argc, char *argv[]) {
     int base_slots_semaphore_id = get_base_slots_semaphore();
 
     for (int i = 0; i < local_configuration.max_drones_on_platform; ++i) {
-        if (semop(base_slots_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+        if (semaphore_unlock(base_slots_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
             return -1;
         }
     }
-    int val = semctl(base_slots_semaphore_id, 0, GETVAL);
-    print_msg_color(COLOR_RED, "Semaphore value %d", val);
 
 
     struct sigaction sig_shutdown_request;
@@ -239,10 +241,19 @@ int main(int argc, char *argv[]) {
     while (!got_shutdown_requested) {
         if (got_sigusr1) {
             got_sigusr1 = 0;
+            int old_max_drones = local_configuration.max_drones_on_platform;
             local_configuration.max_drones_on_platform *= 2;
             if (local_configuration.max_drones_on_platform >= local_configuration.starting_drones_count * 2) {
                 local_configuration.max_drones_on_platform = local_configuration.starting_drones_count * 2 - 1;
             }
+
+            for (int i = old_max_drones; i < local_configuration.max_drones_on_platform; ++i) {
+                if (semaphore_unlock(base_slots_semaphore_id) == -1) {
+                    print_error("While waiting for semaphore: semop -1");
+                    return -1;
+                }
+            }
+
             print_msg("Increased max_drones_on_platform to %d", local_configuration.max_drones_on_platform);
         }
 
@@ -254,9 +265,9 @@ int main(int argc, char *argv[]) {
 
 
 
-
-        if (semop(shm_all_drones_data_semaphore_id, &SEM_LOCK, 1) == -1) {
+        if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
+
             return -1;
         }
         if (shm_all_drones_data->dron_in_base_count < local_configuration.max_drones_on_platform) {
@@ -264,17 +275,20 @@ int main(int argc, char *argv[]) {
                 print_error("Failed to creat a drone");
             };
         }
-        if (semop(shm_all_drones_data_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+        if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
             return -1;
         }
 
-        describe_self(shm_all_drones_data, shm_all_drones_data_semaphore_id, &local_configuration);
+        describe_self(shm_all_drones_data, shm_all_drones_data_semaphore_id, &local_configuration, base_slots_semaphore_id);
 
         usleep(local_configuration.resupply_interval);
     }
 
-
+    int status;
+    while (wait(&status) > 0) {
+        print_msg("Hello");
+    };
     print_msg("Closing operator process");
     return 0;
 }

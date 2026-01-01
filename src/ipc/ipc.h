@@ -43,10 +43,10 @@ union semun {
 };
 
 
-#define SEM_LOCK   ((struct sembuf){0, -1, 0})
+#define SEM_LOCK   ((struct sembuf){0, -1, SEM_UNDO})
 #define SEM_UNLOCK ((struct sembuf){0, +1, 0})
 
-const char* DronData_LocationToString(const DronData_Location location);
+const char *DronData_LocationToString(const DronData_Location location);
 
 /*
  * No critical section is required because the file is used only as a stable anchor for ftok();
@@ -60,6 +60,10 @@ int semaphore_get(const key_t key);
 
 int semaphore_delete(const int semaphore_id);
 
+int semaphore_lock(const int semaphore_id);
+
+int semaphore_unlock(const int semaphore_id);
+
 
 int shm_create(const key_t key, const size_t size);
 
@@ -72,8 +76,10 @@ int shm_detach(const void *addr);
 int shm_destroy(const int shm_id);
 
 
-int SHM_AllDronesData_add_dron(SHM_AllDronesData *p_shm_all_drones_data, Stack *free_space_stack, DronData *p_dron_data);
+int SHM_AllDronesData_add_dron(SHM_AllDronesData *p_shm_all_drones_data, Stack *free_space_stack,
+                               DronData *p_dron_data);
 
-int SHM_AllDronesData_update_dron_location(SHM_AllDronesData *p_shm_all_drones_data, int dron_index, DronData_Location new_dron_location);
+int SHM_AllDronesData_update_dron_location(SHM_AllDronesData *p_shm_all_drones_data, int dron_index,
+                                           DronData_Location new_dron_location);
 
 int SHM_AllDronesData_delete_drone(SHM_AllDronesData *p_shm_all_drones_data, Stack *free_space_stack, int dron_index);

@@ -1,9 +1,12 @@
+#include <errno.h>
 #include "ipc.h"
-
 #include <fcntl.h>
 #include <stdlib.h>
+#include <sys/sem.h>
 
 #include "printer.h"
+
+#define EINTR 4 //Clion is blind
 
 #define DONT_CREAT_FILE 0
 
@@ -46,4 +49,26 @@ int semaphore_delete(const int semaphore_id) {
         return -1;
     }
     return 1;
+}
+
+int semaphore_lock(const int semaphore_id) {
+    for (;;) {
+        if (semop(semaphore_id, &SEM_LOCK, 1) == 0) return 0;
+        if (errno == EINTR) {
+            print_error("Semaphore_Lock has a problem");
+            continue;
+        };
+        return -1;
+    }
+}
+
+int semaphore_unlock(const int semaphore_id) {
+    for (;;) {
+        if (semop(semaphore_id, &SEM_UNLOCK, 1) == 0) return 0;
+        if (errno == EINTR) {
+            print_error("Semaphore_unlock has a problem");
+            continue;
+        };
+        return -1;
+    }
 }

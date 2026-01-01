@@ -38,7 +38,7 @@ static volatile int battery_percentage = 100;
 static pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
 
 
-void sig_end_handler(int sig) {
+void shutdown_request_handler(int sig) {
     got_shutdown_requested = 1;
 }
 
@@ -328,11 +328,12 @@ int main(int argc, char *argv[]) {
     int gate_semaphore_id = get_gate_semaphore();
 
 
-    struct sigaction sig_end;
-    sig_end.sa_handler = sig_end_handler;
-    sigfillset(&sig_end.sa_mask);
-    sig_end.sa_flags = 0;
-    sigaction(SIGTERM, &sig_end, NULL);
+    struct sigaction sig_shutdown_request;
+    sig_shutdown_request.sa_handler = shutdown_request_handler;
+    sigfillset(&sig_shutdown_request.sa_mask);
+    sig_shutdown_request.sa_flags = 0;
+    sigaction(SIGINT, &sig_shutdown_request, NULL);
+    sigaction(SIGTERM, &sig_shutdown_request, NULL);
 
     struct sigaction sif_suicide;
     sif_suicide.sa_handler = sig_suicide_handler;
@@ -395,23 +396,16 @@ int main(int argc, char *argv[]) {
         describe_self(&my_data);
         sleep(1);
     }
+    print_msg("Shouting down");
+
     return 0;
 }
 
 
-// Dodać semafor na wejście do bazy i wyjście z bazy coś jak z gatem
-//
-// Potem to już głównie testy, iejszcze raz testy Ale ten dynamicznie smienainy semafor w bazie może być trudny wiec może shm będzie lepsze
-// Wyłączanie symulacji gdy ilość dronuw w akcji == 0
-// Dodać śmierć przez zurzycie bateri maksymalna ilosć łądowań
+
+
+
 // Dodać stan lokalny na nim operujemy, a potem tylko aktualizujemy stan globalny, przez mem copy
-// Dodać nową lokację w kolejce do bazy i w kolejce na misje
+// Dodać nową lokację w kolejce do bazy i w kolejce na misje??
 //Pzepisać lofki semafora, tak
 
-// int sem_lock(int semid, struct sembuf *op) {
-//     for (;;) {
-//         if (semop(semid, op, 1) == 0) return 0;
-//         if (errno == EINTR) continue;
-//         return -1;
-//     }
-// }

@@ -55,7 +55,6 @@ int semaphore_lock(const int semaphore_id) {
     for (;;) {
         if (semop(semaphore_id, &SEM_LOCK, 1) == 0) return 0;
         if (errno == EINTR) {
-            print_error("Semaphore_Lock has a problem");
             continue;
         };
         return -1;

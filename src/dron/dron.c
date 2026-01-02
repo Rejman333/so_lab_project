@@ -22,6 +22,7 @@ typedef struct {
     int maximum_charge_time;
     int loading_cycles_left;
     DronData_Location location;
+    int have_reserved_space;
 } DronInternalData;
 
 typedef struct {
@@ -113,16 +114,15 @@ int get_initial_configuration(DronInternalData *out_config, const DronData_Locat
     SHM_Configuration *p_shm_config = shm_attach(shm_config_id);
     const int shm_config_semaphore_id = semaphore_get(shm_config_key);
 
-    if (semop(shm_config_semaphore_id, &SEM_LOCK, 1) == -1) {
+    if (semaphore_lock(shm_config_semaphore_id) == -1) {
         print_error("While waiting for semaphore: semop -1");
         return -1;
     }
 
     out_config->maximum_charge_time = p_shm_config->maximum_charge_time;
     out_config->loading_cycles_left = p_shm_config->max_loading_cycles;
-    out_config->my_id = p_shm_config->next_dron_id++;
 
-    if (semop(shm_config_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+    if (semaphore_unlock(shm_config_semaphore_id) == -1) {
         print_error("While leaving semaphore: semop +1");
         return -1;
     }
@@ -135,6 +135,7 @@ int get_initial_configuration(DronInternalData *out_config, const DronData_Locat
         is_charging = 1;
     };
     out_config->location = starting_location;
+    out_config->have_reserved_space = 0;
 
     return 0;
 }
@@ -158,15 +159,16 @@ void *battery(void *arg) {
 }
 
 int pass_the_gate(const int gate_semaphore_id) {
-    if (semop(gate_semaphore_id, &SEM_LOCK, 1) == -1) {
+    if (semaphore_lock(gate_semaphore_id) == -1) {
         print_error("While waiting for semaphore: semop -1");
         return -1;
     }
 
-    sleep(1);
-    print_msg("Passed the gate");
+    print_msg_color(COLOR_RED,"Entered the gate");
+    sleep(2);
+    print_msg_color(COLOR_RED, "Left the gate");
 
-    if (semop(gate_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+    if (semaphore_unlock(gate_semaphore_id) == -1) {
         print_error("While waiting for semaphore: semop -1");
         return -1;
     }
@@ -178,14 +180,14 @@ int process_sigusr1(SHM_AllDronesData *shm_all_drones_data, Stack *shm_stack, Dr
     got_sigusr1 = 0;
     pthread_mutex_lock(&m);
     if (battery_percentage > 20) {
-        if (semop(shm_all_drones_data_semaphore_id, &SEM_LOCK, 1) == -1) {
+        if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
             return -1;
         }
 
-        SHM_AllDronesData_delete_drone(shm_all_drones_data, shm_stack, my_data->my_id);
+        SHM_AllDronesData_delete_drone(shm_all_drones_data, shm_stack, my_data->my_id, my_data->have_reserved_space);
 
-        if (semop(shm_all_drones_data_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+        if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
             return -1;
         }
@@ -203,13 +205,13 @@ int battery_state_check(SHM_AllDronesData *shm_all_drones_data, Stack *shm_stack
                         const int shm_all_drones_data_semaphore_id) {
     pthread_mutex_lock(&m);
     if (battery_percentage <= 0) {
-        if (semop(shm_all_drones_data_semaphore_id, &SEM_LOCK, 1) == -1) {
+        if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
             return -1;
         }
 
-        SHM_AllDronesData_delete_drone(shm_all_drones_data, shm_stack, my_data->my_id);
-        if (semop(shm_all_drones_data_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+        SHM_AllDronesData_delete_drone(shm_all_drones_data, shm_stack, my_data->my_id, my_data->have_reserved_space);
+        if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
             return -1;
         }
@@ -223,36 +225,75 @@ int battery_state_check(SHM_AllDronesData *shm_all_drones_data, Stack *shm_stack
 
 int force_base_return(SHM_AllDronesData *shm_all_drones_data, Stack *shm_stack, DronInternalData *my_data,
                       const int shm_all_drones_data_semaphore_id, const int gate_semaphore_id) {
+
     pthread_mutex_lock(&m);
-    if (battery_percentage < 20) {
-        print_msg_color(COLOR_YELLOW, "Going for a charge");
+    int current_battery_percentage = battery_percentage;
+    pthread_mutex_unlock(&m);
 
-        if (semop(shm_all_drones_data_semaphore_id, &SEM_LOCK, 1) == -1) {
-            print_error("While waiting for semaphore: semop -1");
-            return -1;
-        }
-
+    if (current_battery_percentage < 20) {
         if (my_data->loading_cycles_left <= 0) {
-            SHM_AllDronesData_delete_drone(shm_all_drones_data, shm_stack, my_data->my_index);
-            if (semop(shm_all_drones_data_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+            if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
                 print_error("While waiting for semaphore: semop -1");
                 return -1;
             }
+
+            SHM_AllDronesData_delete_drone(shm_all_drones_data, shm_stack, my_data->my_index, my_data->have_reserved_space);
+
+            if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
+                print_error("While waiting for semaphore: semop -1");
+                return -1;
+            }
+
             print_msg_color(COLOR_RED, "Dron with id: %d Deactivated", my_data->my_id);
             exit(0);
         }
 
-        pass_the_gate(gate_semaphore_id);
-        SHM_AllDronesData_update_dron_location(shm_all_drones_data, my_data->my_index, LOCATION_BASE);
-        if (semop(shm_all_drones_data_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+        print_msg_color(COLOR_YELLOW, "Going for a charge");
+
+        if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
             return -1;
         }
+
+        if (shm_all_drones_data->dron_in_base_count + shm_all_drones_data->dron_reserving_space_count <
+            shm_all_drones_data->maximum_dron_in_base_count) {
+            shm_all_drones_data->dron_reserving_space_count ++;
+            my_data->have_reserved_space = 1;
+            print_msg("Reserved space");
+
+        }else {
+            print_msg("Failed to reserve space");
+            if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
+                print_error("While waiting for semaphore: semop -1");
+                return -1;
+            }
+            return 0;
+        }
+
+        if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
+            print_error("While waiting for semaphore: semop -1");
+            return -1;
+        }
+
+        pass_the_gate(gate_semaphore_id);
+
+        if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
+            print_error("While waiting for semaphore: semop -1");
+            return -1;
+        }
+
+        SHM_AllDronesData_update_dron_location(shm_all_drones_data, my_data->my_index, LOCATION_BASE);
+
+        if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
+            print_error("While waiting for semaphore: semop -1");
+            return -1;
+        }
+        my_data->have_reserved_space = 0;
         my_data->loading_cycles_left--;
         my_data->location = LOCATION_BASE;
         is_charging = 1;
     }
-    pthread_mutex_unlock(&m);
+
     return 0;
 }
 
@@ -262,15 +303,18 @@ int force_leave_base(SHM_AllDronesData *shm_all_drones_data, DronInternalData *m
     if (my_data->location == LOCATION_BASE && battery_percentage >= 100) {
         print_msg_color(COLOR_YELLOW, "Going for a mission");
 
-        if (semop(shm_all_drones_data_semaphore_id, &SEM_LOCK, 1) == -1) {
+
+
+        pass_the_gate(gate_semaphore_id);
+
+        if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
             return -1;
         }
 
-        pass_the_gate(gate_semaphore_id);
         SHM_AllDronesData_update_dron_location(shm_all_drones_data, my_data->my_index, LOCATION_MISSION);
 
-        if (semop(shm_all_drones_data_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+        if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
             return -1;
         }
@@ -296,7 +340,6 @@ void describe_self(const DronInternalData *my_data) {
 
 int main(int argc, char *argv[]) {
     setup_print(PROCESS_NAME, PROCESS_COLOR);
-    srand(time(NULL));
 
     if (argc < 2) {
         print_error("No location argument");
@@ -347,22 +390,26 @@ int main(int argc, char *argv[]) {
         .pid = getpid()
     };
 
-    if (semop(shm_all_drones_data_semaphore_id, &SEM_LOCK, 1) == -1) {
+    if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
         print_error("While waiting for semaphore: semop -1");
         return -1;
     }
 
-    my_data.my_index = SHM_AllDronesData_add_dron(shm_all_drones_data, shm_stack, &my_shm_data);
-    if (my_data.my_index == -1) {
-        //ToDo
-        if (semop(shm_all_drones_data_semaphore_id, &SEM_UNLOCK, 1) == -1) {
-            print_error("While waiting for semaphore: semop -1");
+    if (shm_all_drones_data->dron_in_base_count + shm_all_drones_data->dron_reserving_space_count < shm_all_drones_data
+        ->maximum_dron_in_base_count) {
+        my_data.my_index = SHM_AllDronesData_add_dron(shm_all_drones_data, shm_stack, &my_shm_data);
+        my_data.my_id = shm_all_drones_data->next_dron_id++;
+        if (my_data.my_index == -1) {
+            print_msg_color(COLOR_YELLOW, "Max drones in memory reached.");
+            exit(1);
         }
-        print_msg_color(COLOR_YELLOW, "Max drones in memory reached, i am deleting myself");
+    } else {
+        print_msg_color(COLOR_YELLOW, "Max drones in base reached.");
         exit(1);
     }
 
-    if (semop(shm_all_drones_data_semaphore_id, &SEM_UNLOCK, 1) == -1) {
+
+    if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
         print_error("While waiting for semaphore: semop -1");
         return -1;
     }
@@ -384,6 +431,7 @@ int main(int argc, char *argv[]) {
 
         battery_state_check(shm_all_drones_data, shm_stack, &my_data, shm_all_drones_data_semaphore_id);
 
+
         if (my_data.location == LOCATION_MISSION) {
             force_base_return(shm_all_drones_data, shm_stack, &my_data, shm_all_drones_data_semaphore_id,
                               gate_semaphore_id);
@@ -401,11 +449,6 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-
-
-
-
 // Dodać stan lokalny na nim operujemy, a potem tylko aktualizujemy stan globalny, przez mem copy
 // Dodać nową lokację w kolejce do bazy i w kolejce na misje??
 //Pzepisać lofki semafora, tak
-

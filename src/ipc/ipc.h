@@ -10,6 +10,8 @@ typedef struct {
 
     int maximum_charge_time;
     int max_loading_cycles;
+    int gate_time_to_pass;
+    int dron_work_interval;
 } SHM_Configuration;
 
 typedef enum {

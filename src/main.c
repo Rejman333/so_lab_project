@@ -17,16 +17,20 @@
 #define PROCESS_COLOR COLOR_BLUE
 
 #define GATE_SEMAPHORE_STARTING_VALUE 2
+#define GATE_TIME_TO_PASS 20000
 
+#define MAXIMUM_DRONES_IN_MEMORY 50
 #define STARTING_DRONE_COUNT_DEFAULT 6
-#define RESUPPLY_INTERVAL_DEFAULT 1000000
+#define RESUPPLY_INTERVAL 1000000
+
+#define DRON_WORK_INTERVAL 250000
 #define MAXIMUM_CHARGE_TIME_DEFAULT 4000000
 #define MAXIMUM_LOADING_CYCLES 3
-#define MAXIMUM_DRONES_IN_MEMORY 20
 
 
 
-//ToDo test one more time
+
+
 void process_argv(SHM_Configuration *p_configuration, int argc, char *argv[]) {
     if (argc > 1) {
         p_configuration->starting_drones_count = atoi(argv[1]);
@@ -61,7 +65,23 @@ void process_argv(SHM_Configuration *p_configuration, int argc, char *argv[]) {
     }
 
     if (argc > 5) {
-        print_error("Maximum argument count is 4");
+        p_configuration->gate_time_to_pass = atoi(argv[5]);
+        if (p_configuration->gate_time_to_pass <= 0) {
+            print_error("gate_time_to_pass must be > 0");
+            exit(1);
+        }
+    }
+
+    if (argc > 6) {
+        p_configuration->dron_work_interval = atoi(argv[6]);
+        if (p_configuration->dron_work_interval <= 0) {
+            print_error("dron_work_interval must be > 0");
+            exit(1);
+        }
+    }
+
+    if (argc > 7) {
+        print_error("Maximum argument count is 6");
         exit(1);
     }
 }
@@ -129,9 +149,11 @@ int create_shm_config(SHM_Configuration **out_cfg, int *out_sem_id) {
 
     *cfg = (SHM_Configuration){
         .starting_drones_count = STARTING_DRONE_COUNT_DEFAULT,
-        .resupply_interval = RESUPPLY_INTERVAL_DEFAULT,
+        .resupply_interval = RESUPPLY_INTERVAL,
         .maximum_charge_time = MAXIMUM_CHARGE_TIME_DEFAULT,
         .max_loading_cycles = MAXIMUM_LOADING_CYCLES,
+        .gate_time_to_pass = GATE_TIME_TO_PASS,
+        .dron_work_interval = DRON_WORK_INTERVAL
     };
 
     *out_cfg = cfg;
@@ -257,7 +279,8 @@ int main(int argc, char *argv[]) {
                                                                   &shm_stack_id,
                                                                   &shm_all_drones_data_semaphore_id);
     if (shm_all_drones_data_id == EXIT_FAILURE) {
-        // Todo handle error
+        print_error("Failed to creat shm_all_drones_data");
+        exit(-1);
     }
 
 

@@ -21,8 +21,10 @@ typedef struct {
     int my_index;
     int maximum_charge_time;
     int loading_cycles_left;
-    DronData_Location location;
     int have_reserved_space;
+    int gate_time_to_pass;
+    int work_interval;
+    DronData_Location location;
 } DronInternalData;
 
 typedef struct {
@@ -121,6 +123,8 @@ int get_initial_configuration(DronInternalData *out_config, const DronData_Locat
 
     out_config->maximum_charge_time = p_shm_config->maximum_charge_time;
     out_config->loading_cycles_left = p_shm_config->max_loading_cycles;
+    out_config->gate_time_to_pass = p_shm_config->gate_time_to_pass;
+    out_config->work_interval = p_shm_config->dron_work_interval;
 
     if (semaphore_unlock(shm_config_semaphore_id) == -1) {
         print_error("While leaving semaphore: semop +1");
@@ -158,14 +162,14 @@ void *battery(void *arg) {
     }
 }
 
-int pass_the_gate(const int gate_semaphore_id) {
+int pass_the_gate(const int gate_semaphore_id, int gate_time_to_pass) {
     if (semaphore_lock(gate_semaphore_id) == -1) {
         print_error("While waiting for semaphore: semop -1");
         return -1;
     }
 
     print_msg_color(COLOR_RED,"Entered the gate");
-    sleep(2);
+    usleep(gate_time_to_pass);
     print_msg_color(COLOR_RED, "Left the gate");
 
     if (semaphore_unlock(gate_semaphore_id) == -1) {
@@ -275,7 +279,7 @@ int force_base_return(SHM_AllDronesData *shm_all_drones_data, Stack *shm_stack, 
             return -1;
         }
 
-        pass_the_gate(gate_semaphore_id);
+        pass_the_gate(gate_semaphore_id, my_data->gate_time_to_pass);
 
         if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
@@ -305,7 +309,7 @@ int force_leave_base(SHM_AllDronesData *shm_all_drones_data, DronInternalData *m
 
 
 
-        pass_the_gate(gate_semaphore_id);
+        pass_the_gate(gate_semaphore_id, my_data->gate_time_to_pass);
 
         if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
@@ -442,13 +446,10 @@ int main(int argc, char *argv[]) {
         }
 
         describe_self(&my_data);
-        sleep(1);
+        usleep(my_data.work_interval);
     }
-    print_msg("Shouting down");
+    print_msg("Exiting");
 
     return 0;
 }
-
-// Dodać stan lokalny na nim operujemy, a potem tylko aktualizujemy stan globalny, przez mem copy
-// Dodać nową lokację w kolejce do bazy i w kolejce na misje??
 

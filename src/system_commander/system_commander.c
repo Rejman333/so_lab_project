@@ -115,13 +115,14 @@ int main(int argc, char *argv[]) {
 
     //Mission Plan
     print_msg("Simulation Plan: Starting");
-    // print_msg("Simulation Plan: Increasing Drones");
-    // for (int i = 0; i < 3; ++i) {
-    //     sleep(5);
-    //     if (send_add_drones(operator_pid) == -1) {
-    //         print_error("Sending signal failed");
-    //     }
-    // }
+    print_msg("Simulation Plan: Increasing Drones");
+    for (int i = 0; i < 3; ++i) {
+        if (got_shutdown_requested) exit(0);
+        sleep(5);
+        if (send_add_drones(operator_pid) == -1) {
+            print_error("Sending signal failed");
+        }
+    }
 
     for (int i = 0; i < 10; ++i) {
         if (got_shutdown_requested) exit(0);

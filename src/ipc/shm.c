@@ -53,6 +53,18 @@ int shm_destroy(const int shm_id) {
     return 0;
 }
 
+const char *DronData_LocationToString(const DronData_Location location) {
+    switch (location) {
+        case LOCATION_UNDEFINE: return "LOCATION_UNDEFINE";
+        case LOCATION_BASE: return "LOCATION_BASE";
+        case LOCATION_LEAVING_BASE: return "LOCATION_LEAVING_BASE";
+        case LOCATION_ENTERING_BASE: return "LOCATION_ENTERING_BASE";
+        case LOCATION_MISSION: return "LOCATION_MISSION";
+        default: return "UNKNOWN_LOCATION";
+    }
+}
+
+
 int SHM_AllDronesData_add_dron(SHM_AllDronesData *p_shm_all_drones_data, Stack *free_space_stack,
                                DronData *p_dron_data) {
     int out = -1;
@@ -91,19 +103,22 @@ int SHM_AllDronesData_delete_drone(SHM_AllDronesData *p_shm_all_drones_data, Sta
         p_shm_all_drones_data->dron_reserving_space_count--;
     }
     p_shm_all_drones_data->drones[dron_index].location = LOCATION_UNDEFINE;
+    print_msg("Deleting dron on index: %d. His new location is: %s", dron_index,
+              DronData_LocationToString(p_shm_all_drones_data->drones[dron_index].location));
 
     if (Stack_push(free_space_stack, &dron_index) == STACK_ERROR) return -1;
 
     return dron_index;
 };
 
-const char *DronData_LocationToString(const DronData_Location location) {
-    switch (location) {
-        case LOCATION_UNDEFINE: return "LOCATION_UNDEFINE";
-        case LOCATION_BASE: return "LOCATION_BASE";
-        case LOCATION_LEAVING_BASE: return "LOCATION_LEAVING_BASE";
-        case LOCATION_ENTERING_BASE: return "LOCATION_ENTERING_BASE";
-        case LOCATION_MISSION: return "LOCATION_MISSION";
-        default: return "UNKNOWN_LOCATION";
+
+int SHM_AllDronesData_get_dron_pid(const SHM_AllDronesData *p_shm_all_drones_data) {
+    for (int i = 0; i < p_shm_all_drones_data->capacity; ++i) {
+        if (p_shm_all_drones_data->drones[i].location != LOCATION_UNDEFINE) {
+            print_msg("Found dron on index: %d. His location is: %s", i,
+              DronData_LocationToString(p_shm_all_drones_data->drones[i].location));
+            return p_shm_all_drones_data->drones[i].pid;
+        }
     }
+    return -1;
 }

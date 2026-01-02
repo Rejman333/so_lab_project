@@ -18,13 +18,15 @@
 
 #define GATE_SEMAPHORE_STARTING_VALUE 2
 
-#define STARTING_DRONE_COUNT_DEFAULT 8
+#define STARTING_DRONE_COUNT_DEFAULT 6
 #define RESUPPLY_INTERVAL_DEFAULT 1000000
 #define MAXIMUM_CHARGE_TIME_DEFAULT 4000000
 #define MAXIMUM_LOADING_CYCLES 3
-
 #define MAXIMUM_DRONES_IN_MEMORY 20
 
+
+
+//ToDo test one more time
 void process_argv(SHM_Configuration *p_configuration, int argc, char *argv[]) {
     if (argc > 1) {
         p_configuration->starting_drones_count = atoi(argv[1]);
@@ -73,43 +75,47 @@ void print_configuration(const SHM_Configuration *p_configuration) {
 }
 
 int creat_operator() {
-    int pid = fork();
+    const int pid = fork();
     if (pid == 0) {
         sigset_t empty;
         sigemptyset(&empty);
         sigprocmask(SIG_SETMASK, &empty, NULL);
 
         execl("./operator", "./operator", NULL);
-        perror("exec operator");
-        exit(1);
+        print_error("exec operator");
+        _exit(1);
     }
     return pid;
 }
 
-int creat_system_commander() {
-    int pid = fork();
+
+int creat_system_commander(const int operator_pid) {
+    const pid_t pid = fork();
     if (pid == 0) {
         sigset_t empty;
         sigemptyset(&empty);
         sigprocmask(SIG_SETMASK, &empty, NULL);
 
-        execl("./system_commander", "./system_commander", NULL);
-        perror("exec system_commander");
-        exit(1);
+        char op_pid_str[32];
+        snprintf(op_pid_str, sizeof(op_pid_str), "%d", operator_pid);
+
+        execl("./system_commander", "./system_commander", op_pid_str, (char*)NULL);
+        print_error("exec system_commander");
+        _exit(1);
     }
-    return pid;
+    return (int)pid;
 }
 
 int create_shm_config(SHM_Configuration **out_cfg, int *out_sem_id) {
     if (!out_cfg || !out_sem_id) return -1;
 
-    key_t key = grab_key_from_file(CONFIG_KEY_FILE_NAME);
+    const key_t key = grab_key_from_file(CONFIG_KEY_FILE_NAME);
     if (key < 0) {
-        print_error("Cant grab key");
+        print_error("Cant grab key from file: %s", CONFIG_KEY_FILE_NAME);
         return -1;
     }
 
-    int shm_id = shm_create(key, sizeof(SHM_Configuration));
+    const int shm_id = shm_create(key, sizeof(SHM_Configuration));
     if (shm_id == -1) {
         print_error("Cant create shm");
         return -1;
@@ -138,14 +144,10 @@ int create_shm_config(SHM_Configuration **out_cfg, int *out_sem_id) {
     return shm_id;
 }
 
-int get_value(void) {
-    return MAXIMUM_DRONES_IN_MEMORY;
-}
-
 int create_shm_all_drones_data(SHM_AllDronesData **out_data, Stack **out_stack, int *out_stack_id, int *out_sem_id) {
     if (!out_data || !out_sem_id) return -1;
 
-    key_t shm_all_drones_data_key = grab_key_from_file(ALL_DRONES_DATA_FILE_NAME);
+    const key_t shm_all_drones_data_key = grab_key_from_file(ALL_DRONES_DATA_FILE_NAME);
     if (shm_all_drones_data_key < 0) {
         print_error("Cant grab key");
         return -1;
@@ -153,9 +155,19 @@ int create_shm_all_drones_data(SHM_AllDronesData **out_data, Stack **out_stack, 
 
     size_t bytes_needed = sizeof(SHM_AllDronesData) + MAXIMUM_DRONES_IN_MEMORY * sizeof(DronData);
     const int shm_all_drones_data_id = shm_create(shm_all_drones_data_key, bytes_needed);
+    if (shm_all_drones_data_id < 0) {
+        print_error("Failed to create shm for all_drones_data");
+        return -1;
+    }
 
     SHM_AllDronesData *p_shm_all_drones_data = shm_attach(shm_all_drones_data_id);
+    if (p_shm_all_drones_data == NULL) {
+        print_error("Failed to attach shm for all_drones_data");
+        return -1;
+    }
+
     *p_shm_all_drones_data = (SHM_AllDronesData){
+        .capacity = MAXIMUM_DRONES_IN_MEMORY,
         .next_dron_id = 0,
         .dron_in_base_count = 0,
         .maximum_dron_in_base_count = (STARTING_DRONE_COUNT_DEFAULT / 2) - 1,
@@ -164,16 +176,25 @@ int create_shm_all_drones_data(SHM_AllDronesData **out_data, Stack **out_stack, 
         .dron_reserving_space_count = 0
     };
 
-    bytes_needed = Stack_bytes_needed(get_value(), sizeof(int));
+    bytes_needed = Stack_bytes_needed(MAXIMUM_DRONES_IN_MEMORY, sizeof(int));
 
     const key_t shm_stack_key = grab_key_from_file(STACK_KEY_FILE_NAME);
     if (shm_stack_key < 0) {
         print_error("Cant grab key");
     }
     const int shm_stack_id = shm_create(shm_stack_key, bytes_needed);
+    if (shm_stack_id < 0) {
+        print_error("Failed to create shm for stack");
+        return -1;
+    }
     Stack *p_shm_stack = shm_attach(shm_stack_id);
-    Stack_init(p_shm_stack, MAXIMUM_DRONES_IN_MEMORY, sizeof(int));
-    if (!p_shm_stack) {
+    if (p_shm_stack == NULL) {
+        print_error("Failed to attach shm for stack");
+        return -1;
+    }
+
+
+    if (Stack_init(p_shm_stack, MAXIMUM_DRONES_IN_MEMORY, sizeof(int)) == STACK_ERROR) {
         print_error("Stack Failed with initialization");
         return -1;
     }
@@ -200,6 +221,10 @@ int create_gate_semaphore() {
     }
 
     const int gate_semaphore_id = semaphore_create(gate_key, GATE_SEMAPHORE_STARTING_VALUE);
+    if (gate_semaphore_id < 0) {
+        print_error("Cant creat semaphore");
+        return -1;
+    }
     return gate_semaphore_id;
 }
 
@@ -212,11 +237,12 @@ int main(int argc, char *argv[]) {
     //Setting up shm for config
     SHM_Configuration *shm_configuration = NULL;
     int shm_config_semaphore_id = -1;
-
     const int shm_configuration_id = create_shm_config(&shm_configuration, &shm_config_semaphore_id);
     if (shm_configuration_id == EXIT_FAILURE) {
-        // Todo handle error
+        print_error("Failed to creat shm configuration");
+        exit(-1);
     }
+
     process_argv(shm_configuration, argc, argv);
     print_configuration(shm_configuration);
 
@@ -246,15 +272,15 @@ int main(int argc, char *argv[]) {
         // Todo handle error
     }
 
-    // const int system_commander_pid = creat_system_commander();
-    // if (system_commander_pid < 0) {
-    //     // Todo handle error
-    // }
+    const int system_commander_pid = creat_system_commander(operator_pid);
+    if (system_commander_pid < 0) {
+        // Todo handle error
+    }
 
     print_msg("Waiting for children...");
 
-    // waitpid(system_commander_pid, NULL, 0);
-    // print_msg("System_commander joined");
+    waitpid(system_commander_pid, NULL, 0);
+    print_msg("System_commander joined");
 
     waitpid(operator_pid, NULL, 0);
     print_msg("Operator joined");

@@ -185,7 +185,7 @@ int process_sigusr1(SHM_AllDronesData *shm_all_drones_data, Stack *shm_stack, Dr
             return -1;
         }
 
-        SHM_AllDronesData_delete_drone(shm_all_drones_data, shm_stack, my_data->my_id, my_data->have_reserved_space);
+        SHM_AllDronesData_delete_drone(shm_all_drones_data, shm_stack, my_data->my_index, my_data->have_reserved_space);
 
         if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
@@ -193,7 +193,7 @@ int process_sigusr1(SHM_AllDronesData *shm_all_drones_data, Stack *shm_stack, Dr
         }
 
         print_msg_color(COLOR_RED, "Dron with id: %d Suicided", my_data->my_id);
-        return (0);
+        exit(0);
     }
     print_msg_color(COLOR_YELLOW, "Dron with id: %d ignored suicide command battery at: %d",
                     my_data->my_id, battery_percentage);
@@ -451,4 +451,4 @@ int main(int argc, char *argv[]) {
 
 // Dodać stan lokalny na nim operujemy, a potem tylko aktualizujemy stan globalny, przez mem copy
 // Dodać nową lokację w kolejce do bazy i w kolejce na misje??
-//Pzepisać lofki semafora, tak
+

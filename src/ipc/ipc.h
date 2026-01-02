@@ -34,6 +34,8 @@ typedef struct {
     int maximum_dron_in_base_count;
     int dron_reserving_space_count;
 
+    int capacity;
+
     int drone_lost_count;
 
     DronData drones[];
@@ -87,3 +89,5 @@ int SHM_AllDronesData_update_dron_location(SHM_AllDronesData *p_shm_all_drones_d
 
 int SHM_AllDronesData_delete_drone(SHM_AllDronesData *p_shm_all_drones_data, Stack *free_space_stack, int dron_index,
                                    int has_space_reserved);
+
+int SHM_AllDronesData_get_dron_pid(const SHM_AllDronesData *p_shm_all_drones_data);

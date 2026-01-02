@@ -27,7 +27,6 @@ static volatile sig_atomic_t got_shutdown_requested = 0;
 
 void shutdown_request_handler(int sig) {
     got_shutdown_requested = 1;
-    print_msg_color(COLOR_RED, "Reser Requested %d", sig);
 }
 
 void sigusr1_handler(int sig) {
@@ -242,6 +241,9 @@ int main(int argc, char *argv[]) {
             }
 
             shm_all_drones_data->maximum_dron_in_base_count /= 2;
+            if (shm_all_drones_data->maximum_dron_in_base_count <= 0) {
+                got_shutdown_requested = 1;
+            }
 
             if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
                 print_error("While waiting for semaphore: semop -1");

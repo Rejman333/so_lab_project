@@ -18,12 +18,12 @@
 
 #define GATE_SEMAPHORE_STARTING_VALUE 2
 
-#define STARTING_DRONE_COUNT_DEFAULT 10
+#define STARTING_DRONE_COUNT_DEFAULT 8
 #define RESUPPLY_INTERVAL_DEFAULT 1000000
-#define MAXIMUM_CHARGE_TIME_DEFAULT 10000000
-#define MAXIMUM_LOADING_CYCLES 5
+#define MAXIMUM_CHARGE_TIME_DEFAULT 4000000
+#define MAXIMUM_LOADING_CYCLES 3
 
-#define MAXIMUM_DRONES_IN_MEMORY 30
+#define MAXIMUM_DRONES_IN_MEMORY 20
 
 void process_argv(SHM_Configuration *p_configuration, int argc, char *argv[]) {
     if (argc > 1) {
@@ -67,7 +67,6 @@ void process_argv(SHM_Configuration *p_configuration, int argc, char *argv[]) {
 void print_configuration(const SHM_Configuration *p_configuration) {
     print_msg("=== Starting Configuration ===");
     print_msg("starting_drones_count = %d", p_configuration->starting_drones_count);
-    print_msg("maximum_drones_count = %d", p_configuration->maximum_drones_count);
     print_msg("resupply_interval = %d", p_configuration->resupply_interval);
     print_msg("maximum_charge_time = %d", p_configuration->maximum_charge_time);
     print_msg("max_loading_cycles = %d", p_configuration->max_loading_cycles);
@@ -123,7 +122,6 @@ int create_shm_config(SHM_Configuration **out_cfg, int *out_sem_id) {
     }
 
     *cfg = (SHM_Configuration){
-        .next_dron_id = 0,
         .starting_drones_count = STARTING_DRONE_COUNT_DEFAULT,
         .resupply_interval = RESUPPLY_INTERVAL_DEFAULT,
         .maximum_charge_time = MAXIMUM_CHARGE_TIME_DEFAULT,
@@ -140,6 +138,10 @@ int create_shm_config(SHM_Configuration **out_cfg, int *out_sem_id) {
     return shm_id;
 }
 
+int get_value(void) {
+    return MAXIMUM_DRONES_IN_MEMORY;
+}
+
 int create_shm_all_drones_data(SHM_AllDronesData **out_data, Stack **out_stack, int *out_stack_id, int *out_sem_id) {
     if (!out_data || !out_sem_id) return -1;
 
@@ -154,13 +156,15 @@ int create_shm_all_drones_data(SHM_AllDronesData **out_data, Stack **out_stack, 
 
     SHM_AllDronesData *p_shm_all_drones_data = shm_attach(shm_all_drones_data_id);
     *p_shm_all_drones_data = (SHM_AllDronesData){
+        .next_dron_id = 0,
         .dron_in_base_count = 0,
+        .maximum_dron_in_base_count = (STARTING_DRONE_COUNT_DEFAULT / 2) - 1,
         .drone_lost_count = 0,
-        .missions_completed_count = 0,
-        .dron_count = 0
+        .dron_count = 0,
+        .dron_reserving_space_count = 0
     };
 
-    bytes_needed = Stack_bytes_needed(MAXIMUM_DRONES_IN_MEMORY, sizeof(int));
+    bytes_needed = Stack_bytes_needed(get_value(), sizeof(int));
 
     const key_t shm_stack_key = grab_key_from_file(STACK_KEY_FILE_NAME);
     if (shm_stack_key < 0) {
@@ -198,6 +202,7 @@ int create_gate_semaphore() {
     const int gate_semaphore_id = semaphore_create(gate_key, GATE_SEMAPHORE_STARTING_VALUE);
     return gate_semaphore_id;
 }
+
 
 int main(int argc, char *argv[]) {
     setup_print(PROCESS_NAME, PROCESS_COLOR);

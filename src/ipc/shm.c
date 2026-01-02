@@ -53,7 +53,8 @@ int shm_destroy(const int shm_id) {
     return 0;
 }
 
-int SHM_AllDronesData_add_dron(SHM_AllDronesData *p_shm_all_drones_data, Stack *free_space_stack, DronData *p_dron_data) {
+int SHM_AllDronesData_add_dron(SHM_AllDronesData *p_shm_all_drones_data, Stack *free_space_stack,
+                               DronData *p_dron_data) {
     int out = -1;
     if (Stack_pop(free_space_stack, &out) == STACK_ERROR) return -1;
 
@@ -66,24 +67,28 @@ int SHM_AllDronesData_add_dron(SHM_AllDronesData *p_shm_all_drones_data, Stack *
     return out;
 };
 
-int SHM_AllDronesData_mission_completed(SHM_AllDronesData *p_shm_all_drones_data) {
-    p_shm_all_drones_data->missions_completed_count++;
-    return p_shm_all_drones_data->missions_completed_count;
-};
 
 int SHM_AllDronesData_update_dron_location(SHM_AllDronesData *p_shm_all_drones_data, const int dron_index,
-                                      DronData_Location new_dron_location) {
+                                           DronData_Location new_dron_location) {
     const DronData_Location old_location = p_shm_all_drones_data->drones[dron_index].location;
     if (old_location == LOCATION_BASE) p_shm_all_drones_data->dron_in_base_count--;
+    if (old_location == LOCATION_MISSION) {
+        p_shm_all_drones_data->dron_in_base_count++;
+        p_shm_all_drones_data->dron_reserving_space_count--;
+    }
     p_shm_all_drones_data->drones[dron_index].location = new_dron_location;
     return 0;
 };
 
-int SHM_AllDronesData_delete_drone(SHM_AllDronesData *p_shm_all_drones_data, Stack *free_space_stack, const int dron_index) {
+int SHM_AllDronesData_delete_drone(SHM_AllDronesData *p_shm_all_drones_data, Stack *free_space_stack,
+                                   const int dron_index, const int has_space_reserved) {
     p_shm_all_drones_data->dron_count--;
     p_shm_all_drones_data->drone_lost_count++;
     if (p_shm_all_drones_data->drones[dron_index].location == LOCATION_BASE) {
         p_shm_all_drones_data->dron_in_base_count--;
+    }
+    if (has_space_reserved) {
+        p_shm_all_drones_data->dron_reserving_space_count--;
     }
     p_shm_all_drones_data->drones[dron_index].location = LOCATION_UNDEFINE;
 
@@ -91,3 +96,14 @@ int SHM_AllDronesData_delete_drone(SHM_AllDronesData *p_shm_all_drones_data, Sta
 
     return dron_index;
 };
+
+const char *DronData_LocationToString(const DronData_Location location) {
+    switch (location) {
+        case LOCATION_UNDEFINE: return "LOCATION_UNDEFINE";
+        case LOCATION_BASE: return "LOCATION_BASE";
+        case LOCATION_LEAVING_BASE: return "LOCATION_LEAVING_BASE";
+        case LOCATION_ENTERING_BASE: return "LOCATION_ENTERING_BASE";
+        case LOCATION_MISSION: return "LOCATION_MISSION";
+        default: return "UNKNOWN_LOCATION";
+    }
+}

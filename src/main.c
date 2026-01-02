@@ -27,7 +27,7 @@
 #define MAXIMUM_CHARGE_TIME_DEFAULT 4000000
 #define MAXIMUM_LOADING_CYCLES 3
 
-
+#define LOG_FILE_NAME "log.txt"
 
 
 
@@ -253,6 +253,7 @@ int create_gate_semaphore() {
 
 int main(int argc, char *argv[]) {
     setup_print(PROCESS_NAME, PROCESS_COLOR);
+    global_logger_initialize(LOG_FILE_NAME);
     signal(SIGINT, SIG_IGN);
 
 
@@ -323,5 +324,6 @@ int main(int argc, char *argv[]) {
     semaphore_delete(gate_semaphore_id);
 
     print_msg("Cleanup complete.");
+    logger_shutdown();
     return 0;
 }

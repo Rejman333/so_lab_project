@@ -16,6 +16,8 @@
 #define PROCESS_NAME "Operator"
 #define PROCESS_COLOR COLOR_CYAN
 
+#define LOG_FILE_NAME "log.txt"
+
 typedef struct {
     int starting_drones_count;
     int resupply_interval;
@@ -163,6 +165,7 @@ int describe_self(const SHM_AllDronesData *shm_all_drones_data, const int shm_al
 
 int main(int argc, char *argv[]) {
     setup_print(PROCESS_NAME, PROCESS_COLOR);
+    logger_initialize(LOG_FILE_NAME);
 
     OperatorConfiguration local_configuration;
 
@@ -281,5 +284,6 @@ int main(int argc, char *argv[]) {
     while (wait(&status) > 0) {
     };
     print_msg("Closing operator process");
+    logger_shutdown();
     return 0;
 }

@@ -28,6 +28,12 @@
 
 void setup_print(const char *name, const char *color);
 
+int global_logger_initialize(const char* log_file_path);
+
+int logger_initialize(const char* log_file_path);
+
+void logger_shutdown();
+
 __attribute__((format(printf, 1, 2)))
 void print_msg(const char *fmt, ...);
 

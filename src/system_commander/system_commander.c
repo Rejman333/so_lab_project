@@ -13,6 +13,8 @@
 #define PROCESS_NAME "System Commander"
 #define PROCESS_COLOR COLOR_ORANGE
 
+#define LOG_FILE_NAME "log.txt"
+
 static volatile sig_atomic_t got_shutdown_requested = 0;
 
 void shutdown_request_handler(int sig) {
@@ -79,6 +81,7 @@ int send_suicide(const pid_t dron_pid) {
 
 int main(int argc, char *argv[]) {
     setup_print(PROCESS_NAME, PROCESS_COLOR);
+    logger_initialize(LOG_FILE_NAME);
 
     struct sigaction sig_shutdown_request;
     sig_shutdown_request.sa_handler = shutdown_request_handler;
@@ -157,5 +160,6 @@ int main(int argc, char *argv[]) {
     }
 
     print_msg("Simulation Plan: Finished");
+    logger_shutdown();
     return 0;
 }

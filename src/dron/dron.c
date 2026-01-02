@@ -16,6 +16,8 @@
 #define PROCESS_NAME "Dron"
 #define PROCESS_COLOR COLOR_MAGENTA
 
+#define LOG_FILE_NAME "log.txt"
+
 typedef struct {
     int my_id;
     int my_index;
@@ -344,6 +346,7 @@ void describe_self(const DronInternalData *my_data) {
 
 int main(int argc, char *argv[]) {
     setup_print(PROCESS_NAME, PROCESS_COLOR);
+    logger_initialize(LOG_FILE_NAME);
 
     if (argc < 2) {
         print_error("No location argument");
@@ -449,7 +452,7 @@ int main(int argc, char *argv[]) {
         usleep(my_data.work_interval);
     }
     print_msg("Exiting");
-
+    logger_shutdown();
     return 0;
 }
 

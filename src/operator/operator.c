@@ -43,25 +43,38 @@ void sigusr2_handler(int sig) {
     got_sigusr2 = 1;
 }
 
-//Todo Redo
 int creat_dron(const DronData_Location location) {
-    const int dron_pid = fork();
+    // CHANGED: fork() może zwrócić -1 (np. limit procesów/pids, ENOMEM).
+    // Musimy to obsłużyć, bo inaczej caller dostanie "jakiś PID" i będzie żył w błędzie.
+    pid_t pid = fork();
 
-    if (dron_pid == 0) {
-        char slot_arg[16];
-        snprintf(slot_arg, sizeof(slot_arg), "%d", location);
-
-        execl(
-            "./dron",
-            "./dron",
-            slot_arg,
-            NULL
-        );
-
-        print_error("exec dron");
-        exit(1);
+    if (pid < 0) {
+        // CHANGED: logujemy przyczynę (errno) i zwracamy błąd.
+        // Typowe errno: EAGAIN (limit procesów), ENOMEM.
+        print_error("fork dron failed");
+        return -1;
     }
-    return dron_pid;
+
+    if (pid == 0) {
+        char slot_arg[16];
+        const int n = snprintf(slot_arg, sizeof(slot_arg), "%d", (int)location);
+
+        if (n < 0) {
+            print_error("snprintf slot_arg failed");
+            _exit(1);
+        }
+        if (n >= (int)sizeof(slot_arg)) {
+            print_error("slot_arg truncated");
+            _exit(1);
+        }
+
+        execl("./dron", "./dron", slot_arg, (char *)NULL);
+        print_error("exec dron failed");
+        _exit(1);
+    }
+
+
+    return pid;
 }
 
 int generate_starting_drones() {

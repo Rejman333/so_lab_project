@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
@@ -17,6 +18,8 @@
 #define PROCESS_COLOR COLOR_CYAN
 
 #define LOG_FILE_NAME "log.txt"
+
+#define EINTR 4
 
 static volatile sig_atomic_t got_sigusr1 = 0;
 static volatile sig_atomic_t got_sigusr2 = 0;
@@ -57,18 +60,18 @@ int creat_dron(const DronData_Location location) {
 
     if (pid == 0) {
         char slot_arg[16];
-        const int n = snprintf(slot_arg, sizeof(slot_arg), "%d", (int)location);
+        const int n = snprintf(slot_arg, sizeof(slot_arg), "%d", (int) location);
 
         if (n < 0) {
             print_error("snprintf slot_arg failed");
             _exit(1);
         }
-        if (n >= (int)sizeof(slot_arg)) {
+        if (n >= (int) sizeof(slot_arg)) {
             print_error("slot_arg truncated");
             _exit(1);
         }
 
-        execl("./dron", "./dron", slot_arg, (char *)NULL);
+        execl("./dron", "./dron", slot_arg, (char *) NULL);
         print_error("exec dron failed");
         _exit(1);
     }
@@ -214,6 +217,7 @@ int get_shm_all_drones_data() {
     const key_t shm_stack_key = grab_key_from_file(STACK_KEY_FILE_NAME);
     if (shm_stack_key < 0) {
         print_error("Cant grab key");
+        return -1;
     }
     shm_stack_id = shm_get(shm_stack_key);
     if (shm_stack_id < 0) {
@@ -232,6 +236,21 @@ int get_shm_all_drones_data() {
         return -1;
     }
     return 0;
+}
+
+int sleep_interruptible(const int sec, const int nsec) {
+    struct timespec req = {.tv_sec = sec, .tv_nsec = nsec};
+    struct timespec rem = {0};
+
+    while (!got_shutdown_requested) {
+        if (nanosleep(&req, &rem) == 0) return 0;
+        if (errno == EINTR) {
+            req = rem;
+            continue;
+        }
+        return -1;
+    }
+    return 1;
 }
 
 
@@ -290,7 +309,7 @@ int main(int argc, char *argv[]) {
         close_main(EXIT_FAILURE);
     }
 
-    if (generate_starting_drones(local_configuration.starting_drones_count) != 0) {
+    if (generate_starting_drones() != 0) {
         print_error("Generating drones failed");
         close_main(EXIT_FAILURE);
     }
@@ -346,18 +365,23 @@ int main(int argc, char *argv[]) {
             close_main(EXIT_FAILURE);
         }
 
-        if (shm_all_drones_data->dron_in_base_count + shm_all_drones_data->dron_reserving_space_count <
-            shm_all_drones_data->maximum_dron_in_base_count) {
+        //Rozwarz rezerwowanie miejsca dla drona w tym miejscu
+        int can_create_dron = (shm_all_drones_data->dron_in_base_count +
+                               shm_all_drones_data->dron_reserving_space_count <
+                               shm_all_drones_data->maximum_dron_in_base_count);
+
+        if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
+            print_error("While waiting for semaphore: semop -1");
+            close_main(EXIT_FAILURE);
+        }
+
+        if (can_create_dron) {
             if (creat_dron(LOCATION_BASE) < 0) {
                 print_msg_color(COLOR_SKY_BLUE, "Failed to creat a drone");
                 //We dont stop program on this
             }
         }
 
-        if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
-            print_error("While waiting for semaphore: semop -1");
-            close_main(EXIT_FAILURE);
-        }
 
         if (describe_self() != 0) {
             print_error("Describing self failed");

@@ -48,7 +48,7 @@ int semaphore_delete(const int semaphore_id) {
         print_error("Failed to delete semaphore ID %d", semaphore_id);
         return -1;
     }
-    return 1;
+    return 0;
 }
 
 int semaphore_lock(const int semaphore_id) {

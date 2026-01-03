@@ -1,3 +1,5 @@
+#include <errno.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -23,111 +25,195 @@
 #define STARTING_DRONE_COUNT_DEFAULT 6
 #define RESUPPLY_INTERVAL 1000000
 
-#define DRON_WORK_INTERVAL 250000
+#define DRON_WORK_INTERVAL 500000
 #define MAXIMUM_CHARGE_TIME_DEFAULT 4000000
 #define MAXIMUM_LOADING_CYCLES 3
 
 #define LOG_FILE_NAME "log.txt"
 
+SHM_Configuration *shm_configuration = NULL;
+int shm_configuration_id = -1;
+int shm_configuration_semaphore_id = -1;
 
+SHM_AllDronesData *shm_all_drones_data = NULL;
+int shm_all_drones_data_id = -1;
+Stack *shm_stack = NULL;
+int shm_stack_id = -1;
+int shm_all_drones_data_semaphore_id = -1;
 
-void process_argv(SHM_Configuration *p_configuration, int argc, char *argv[]) {
-    if (argc > 1) {
-        p_configuration->starting_drones_count = atoi(argv[1]);
-        if (p_configuration->starting_drones_count <= 0) {
-            print_error("starting_drones_count must be > 0");
-            exit(1);
+int gate_semaphore_id = -1;
+
+int operator_pid = -1;
+int system_commander_pid = -1;
+
+static int parse_positive_int(const char *arg, const char *name) {
+    char *end;
+
+    errno = 0;
+    const long value = strtol(arg, &end, 10);
+
+    if (errno != 0 || *end != '\0' || value <= 0 || value > INT_MAX) {
+        print_error("Invalid value for %s: %s\n", name, arg);
+        exit(EXIT_FAILURE);
+    }
+
+    return (int) value;
+}
+
+static void print_usage(const char *program_name) {
+    fprintf(stderr,
+            "Usage: %s [options]\n"
+            "Options:\n"
+            "  -n <count>   starting drones count\n"
+            "  -r <time>    resupply interval\n"
+            "  -c <time>    maximum charge time\n"
+            "  -l <count>   max loading cycles\n"
+            "  -g <time>    gate time to pass\n"
+            "  -w <time>    drone work interval\n"
+            "  -h           show this help message\n",
+            program_name
+    );
+}
+
+//TODO debag work on that
+void process_argv(SHM_Configuration *cfg, int argc, char *argv[]) {
+    int opt;
+
+    while ((opt = getopt(argc, argv, "n:r:c:l:g:w:h")) != -1) {
+        switch (opt) {
+            case 'n':
+                cfg->starting_drones_count =
+                        parse_positive_int(optarg, "starting_drones_count");
+                break;
+
+            case 'r':
+                cfg->resupply_interval =
+                        parse_positive_int(optarg, "resupply_interval");
+                break;
+
+            case 'c':
+                cfg->maximum_charge_time =
+                        parse_positive_int(optarg, "maximum_charge_time");
+                break;
+
+            case 'l':
+                cfg->max_loading_cycles =
+                        parse_positive_int(optarg, "max_loading_cycles");
+                break;
+
+            case 'g':
+                cfg->gate_time_to_pass =
+                        parse_positive_int(optarg, "gate_time_to_pass");
+                break;
+
+            case 'w':
+                cfg->dron_work_interval =
+                        parse_positive_int(optarg, "dron_work_interval");
+                break;
+
+            case 'h':
+                print_usage(argv[0]);
+                exit(EXIT_SUCCESS);
+
+            default:
+                print_usage(argv[0]);
+                exit(EXIT_FAILURE);
         }
     }
 
-    if (argc > 2) {
-        p_configuration->resupply_interval = atoi(argv[2]);
-        if (p_configuration->resupply_interval <= 0) {
-            print_error("resupply_interval must be > 0");
-            exit(1);
-        }
-    }
-
-    if (argc > 3) {
-        p_configuration->maximum_charge_time = atoi(argv[3]);
-        if (p_configuration->maximum_charge_time <= 0) {
-            print_error("maximum_charge_time must be > 0");
-            exit(1);
-        }
-    }
-
-    if (argc > 4) {
-        p_configuration->max_loading_cycles = atoi(argv[4]);
-        if (p_configuration->max_loading_cycles <= 0) {
-            print_error("max_loading_cycles must be > 0");
-            exit(1);
-        }
-    }
-
-    if (argc > 5) {
-        p_configuration->gate_time_to_pass = atoi(argv[5]);
-        if (p_configuration->gate_time_to_pass <= 0) {
-            print_error("gate_time_to_pass must be > 0");
-            exit(1);
-        }
-    }
-
-    if (argc > 6) {
-        p_configuration->dron_work_interval = atoi(argv[6]);
-        if (p_configuration->dron_work_interval <= 0) {
-            print_error("dron_work_interval must be > 0");
-            exit(1);
-        }
-    }
-
-    if (argc > 7) {
-        print_error("Maximum argument count is 6");
-        exit(1);
+    if (optind < argc) {
+        fprintf(stderr, "Unexpected argument: %s\n", argv[optind]);
+        exit(EXIT_FAILURE);
     }
 }
 
-void print_configuration(const SHM_Configuration *p_configuration) {
+void print_configuration(const SHM_Configuration *cfg) {
+    if (cfg == NULL) {
+        print_error("Configuration is NULL");
+        return;
+    }
+
     print_msg("=== Starting Configuration ===");
-    print_msg("starting_drones_count = %d", p_configuration->starting_drones_count);
-    print_msg("resupply_interval = %d", p_configuration->resupply_interval);
-    print_msg("maximum_charge_time = %d", p_configuration->maximum_charge_time);
-    print_msg("max_loading_cycles = %d", p_configuration->max_loading_cycles);
+
+    print_msg("starting_drones_count  = %d", cfg->starting_drones_count);
+    print_msg("resupply_interval      = %d", cfg->resupply_interval);
+    print_msg("maximum_charge_time    = %d", cfg->maximum_charge_time);
+    print_msg("max_loading_cycles     = %d", cfg->max_loading_cycles);
+    print_msg("gate_time_to_pass      = %d", cfg->gate_time_to_pass);
+    print_msg("dron_work_interval     = %d", cfg->dron_work_interval);
 }
 
 int creat_operator() {
-    const int pid = fork();
+    const pid_t pid = fork();
+    if (pid < 0) {
+        print_error("fork operator failed");
+        return -1;
+    }
     if (pid == 0) {
         sigset_t empty;
-        sigemptyset(&empty);
-        sigprocmask(SIG_SETMASK, &empty, NULL);
 
-        execl("./operator", "./operator", NULL);
-        print_error("exec operator");
+        if (sigemptyset(&empty) != 0) {
+            print_error("sigemptyset failed");
+            _exit(1);
+        }
+
+        if (sigprocmask(SIG_SETMASK, &empty, NULL) == -1) {
+            print_error("sigprocmask failed");
+            _exit(1);
+        }
+        execl("./operator", "./operator", (char *)NULL);
+
+        print_error("exec operator failed");
         _exit(1);
     }
-    return pid;
+
+    operator_pid = pid;
+    return 0;
 }
 
-
-int creat_system_commander(const int operator_pid) {
+int creat_system_commander() {
     const pid_t pid = fork();
+    if (pid < 0) {
+        print_error("fork system_commander failed");
+        return -1;
+    }
     if (pid == 0) {
         sigset_t empty;
-        sigemptyset(&empty);
-        sigprocmask(SIG_SETMASK, &empty, NULL);
+
+        if (sigemptyset(&empty) != 0) {
+            print_error("sigemptyset failed");
+            _exit(1);
+        }
+        if (sigprocmask(SIG_SETMASK, &empty, NULL) == -1) {
+            print_error("sigprocmask failed");
+            _exit(1);
+        }
 
         char op_pid_str[32];
-        snprintf(op_pid_str, sizeof(op_pid_str), "%d", operator_pid);
+        const int n = snprintf(op_pid_str, sizeof(op_pid_str), "%d", operator_pid);
 
-        execl("./system_commander", "./system_commander", op_pid_str, (char*)NULL);
-        print_error("exec system_commander");
+        if (n < 0) {
+            print_error("snprintf failed");
+            _exit(1);
+        }
+
+        if (n >= (int)sizeof(op_pid_str)) {
+            print_error("operator_pid string truncated");
+            _exit(1);
+        }
+
+        execl("./system_commander", "./system_commander", op_pid_str, (char *)NULL);
+
+        print_error("exec system_commander failed");
         _exit(1);
     }
-    return (int)pid;
+
+    system_commander_pid = pid;
+    return 0;
 }
 
-int create_shm_config(SHM_Configuration **out_cfg, int *out_sem_id) {
-    if (!out_cfg || !out_sem_id) return -1;
+int create_shm_config(SHM_Configuration *local_configuration) {
+    if (!local_configuration) return -1;
 
     const key_t key = grab_key_from_file(CONFIG_KEY_FILE_NAME);
     if (key < 0) {
@@ -135,40 +221,30 @@ int create_shm_config(SHM_Configuration **out_cfg, int *out_sem_id) {
         return -1;
     }
 
-    const int shm_id = shm_create(key, sizeof(SHM_Configuration));
-    if (shm_id == -1) {
-        print_error("Cant create shm");
+    shm_configuration_id = shm_create(key, sizeof(SHM_Configuration));
+    if (shm_configuration_id == -1) {
+        print_error("Cant create shm for configuration");
         return -1;
     }
 
-    SHM_Configuration *cfg = shm_attach(shm_id);
-    if (!cfg) {
+    shm_configuration = shm_attach(shm_configuration_id);
+    if (!shm_configuration) {
         print_error("Cant attach shm");
         return -1;
     }
 
-    *cfg = (SHM_Configuration){
-        .starting_drones_count = STARTING_DRONE_COUNT_DEFAULT,
-        .resupply_interval = RESUPPLY_INTERVAL,
-        .maximum_charge_time = MAXIMUM_CHARGE_TIME_DEFAULT,
-        .max_loading_cycles = MAXIMUM_LOADING_CYCLES,
-        .gate_time_to_pass = GATE_TIME_TO_PASS,
-        .dron_work_interval = DRON_WORK_INTERVAL
-    };
+    *shm_configuration = *local_configuration;
 
-    *out_cfg = cfg;
-    *out_sem_id = semaphore_create(key, 1);
-    if (*out_sem_id == -1) {
-        print_error("Cant create semaphore");
+    shm_configuration_semaphore_id = semaphore_create(key, 1);
+    if (shm_configuration_semaphore_id == -1) {
+        print_error("Cant create semaphore for configuration");
         return -1;
     }
 
-    return shm_id;
+    return 0;
 }
 
-int create_shm_all_drones_data(SHM_AllDronesData **out_data, Stack **out_stack, int *out_stack_id, int *out_sem_id) {
-    if (!out_data || !out_sem_id) return -1;
-
+int create_shm_all_drones_data() {
     const key_t shm_all_drones_data_key = grab_key_from_file(ALL_DRONES_DATA_FILE_NAME);
     if (shm_all_drones_data_key < 0) {
         print_error("Cant grab key");
@@ -176,19 +252,19 @@ int create_shm_all_drones_data(SHM_AllDronesData **out_data, Stack **out_stack, 
     }
 
     size_t bytes_needed = sizeof(SHM_AllDronesData) + MAXIMUM_DRONES_IN_MEMORY * sizeof(DronData);
-    const int shm_all_drones_data_id = shm_create(shm_all_drones_data_key, bytes_needed);
+    shm_all_drones_data_id = shm_create(shm_all_drones_data_key, bytes_needed);
     if (shm_all_drones_data_id < 0) {
         print_error("Failed to create shm for all_drones_data");
         return -1;
     }
 
-    SHM_AllDronesData *p_shm_all_drones_data = shm_attach(shm_all_drones_data_id);
-    if (p_shm_all_drones_data == NULL) {
+    shm_all_drones_data = shm_attach(shm_all_drones_data_id);
+    if (shm_all_drones_data == NULL) {
         print_error("Failed to attach shm for all_drones_data");
         return -1;
     }
 
-    *p_shm_all_drones_data = (SHM_AllDronesData){
+    *shm_all_drones_data = (SHM_AllDronesData){
         .capacity = MAXIMUM_DRONES_IN_MEMORY,
         .next_dron_id = 0,
         .dron_in_base_count = 0,
@@ -204,35 +280,35 @@ int create_shm_all_drones_data(SHM_AllDronesData **out_data, Stack **out_stack, 
     if (shm_stack_key < 0) {
         print_error("Cant grab key");
     }
-    const int shm_stack_id = shm_create(shm_stack_key, bytes_needed);
+    shm_stack_id = shm_create(shm_stack_key, bytes_needed);
     if (shm_stack_id < 0) {
         print_error("Failed to create shm for stack");
         return -1;
     }
-    Stack *p_shm_stack = shm_attach(shm_stack_id);
-    if (p_shm_stack == NULL) {
+    shm_stack = shm_attach(shm_stack_id);
+    if (shm_stack == NULL) {
         print_error("Failed to attach shm for stack");
         return -1;
     }
 
 
-    if (Stack_init(p_shm_stack, MAXIMUM_DRONES_IN_MEMORY, sizeof(int)) == STACK_ERROR) {
+    if (Stack_init(shm_stack, MAXIMUM_DRONES_IN_MEMORY, sizeof(int)) == STACK_ERROR) {
         print_error("Stack Failed with initialization");
         return -1;
     }
 
     int index = MAXIMUM_DRONES_IN_MEMORY - 1;
-    while (!Stack_is_full(p_shm_stack)) {
-        Stack_push(p_shm_stack, &index);
+    while (!Stack_is_full(shm_stack)) {
+        Stack_push(shm_stack, &index);
         index--;
     }
 
-    *out_sem_id = semaphore_create(shm_all_drones_data_key, 1);
-    *out_data = p_shm_all_drones_data;
-    *out_stack = p_shm_stack;
-    *out_stack_id = shm_stack_id;
-
-    return shm_all_drones_data_id;
+    shm_all_drones_data_semaphore_id = semaphore_create(shm_all_drones_data_key, 1);
+    if (shm_all_drones_data_semaphore_id < 0) {
+        print_error("Cant create semaphore for all_drones_data");
+        return -1;
+    }
+    return 0;
 }
 
 int create_gate_semaphore() {
@@ -242,88 +318,163 @@ int create_gate_semaphore() {
         return -1;
     }
 
-    const int gate_semaphore_id = semaphore_create(gate_key, GATE_SEMAPHORE_STARTING_VALUE);
+    gate_semaphore_id = semaphore_create(gate_key, GATE_SEMAPHORE_STARTING_VALUE);
     if (gate_semaphore_id < 0) {
         print_error("Cant creat semaphore");
         return -1;
     }
-    return gate_semaphore_id;
+    return 0;
 }
 
+int close_main(const int exit_code) {
+    int status;
+    if (system_commander_pid > -1) {
+        pid_t r = waitpid(system_commander_pid, &status, 0);
 
-int main(int argc, char *argv[]) {
-    setup_print(PROCESS_NAME, PROCESS_COLOR);
-    global_logger_initialize(LOG_FILE_NAME);
-    signal(SIGINT, SIG_IGN);
+        if (r == -1) {
+            print_error("waitpid system_commander failed");
+        } else {
+            print_msg("System_commander joined");
 
-
-    //Setting up shm for config
-    SHM_Configuration *shm_configuration = NULL;
-    int shm_config_semaphore_id = -1;
-    const int shm_configuration_id = create_shm_config(&shm_configuration, &shm_config_semaphore_id);
-    if (shm_configuration_id == EXIT_FAILURE) {
-        print_error("Failed to creat shm configuration");
-        exit(-1);
+            if (WIFSIGNALED(status)) {
+                print_error("System_commander killed by signal %d", WTERMSIG(status));
+            } else if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+                print_error("System_commander exited with code %d", WEXITSTATUS(status));
+            }
+        }
+        system_commander_pid = -1;
     }
+    if (operator_pid > -1) {
 
-    process_argv(shm_configuration, argc, argv);
-    print_configuration(shm_configuration);
+        pid_t r = waitpid(operator_pid, &status, 0);
 
-    //Setting up shm for dron_info
-    SHM_AllDronesData *shm_all_drones_data = NULL;
-    Stack *shm_stack = NULL;
-    int shm_stack_id = -1;
-    int shm_all_drones_data_semaphore_id = -1;
+        if (r == -1) {
+            print_error("waitpid operator failed");
+        } else {
+            print_msg("Operator joined");
 
-    const int shm_all_drones_data_id = create_shm_all_drones_data(&shm_all_drones_data,
-                                                                  &shm_stack,
-                                                                  &shm_stack_id,
-                                                                  &shm_all_drones_data_semaphore_id);
-    if (shm_all_drones_data_id == EXIT_FAILURE) {
-        print_error("Failed to creat shm_all_drones_data");
-        exit(-1);
+            if (WIFSIGNALED(status)) {
+                print_error("Operator killed by signal %d", WTERMSIG(status));
+            } else if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+                print_error("Operator exited with code %d", WEXITSTATUS(status));
+            }
+        }
+
+        operator_pid = -1;
     }
+    if (shm_configuration_id > -1 && shm_configuration) {
 
+        if (shm_detach(shm_configuration) != 0) {
+            print_error("shm_detach configuration failed");
+        }
 
-    const int gate_semaphore_id = create_gate_semaphore();
-    if (gate_semaphore_id == EXIT_FAILURE) {
-        // Todo handle error
+        if (shm_destroy(shm_configuration_id) != 0) {
+            print_error("shm_destroy configuration failed");
+        }
+
+        shm_configuration = NULL;
+        shm_configuration_id = -1;
     }
+    if (shm_all_drones_data_id > -1 && shm_all_drones_data) {
 
+        if (shm_detach(shm_all_drones_data) != 0) {
+            print_error("shm_detach all_drones_data failed");
+        }
 
-    const int operator_pid = creat_operator();
-    if ((operator_pid) < 0) {
-        // Todo handle error
+        if (shm_destroy(shm_all_drones_data_id) != 0) {
+            print_error("shm_destroy all_drones_data failed");
+        }
+
+        shm_all_drones_data = NULL;
+        shm_all_drones_data_id = -1;
     }
+    if (shm_stack_id > -1 && shm_stack) {
 
-    const int system_commander_pid = creat_system_commander(operator_pid);
-    if (system_commander_pid < 0) {
-        // Todo handle error
+        if (shm_detach(shm_stack) != 0) {
+            print_error("shm_detach stack failed");
+        }
+
+        if (shm_destroy(shm_stack_id) != 0) {
+            print_error("shm_destroy stack failed");
+        }
+
+        shm_stack = NULL;
+        shm_stack_id = -1;
     }
+    if (shm_configuration_semaphore_id > -1) {
+        if (semaphore_delete(shm_configuration_semaphore_id) != 0) {
+            print_error("semaphore_delete configuration failed");
+        }
+        shm_configuration_semaphore_id = -1;
+    }
+    if (shm_all_drones_data_semaphore_id > -1) {
 
-    print_msg("Waiting for children...");
+        if (semaphore_delete(shm_all_drones_data_semaphore_id) != 0) {
+            print_error("semaphore_delete all_drones_data failed");
+        }
 
-    waitpid(system_commander_pid, NULL, 0);
-    print_msg("System_commander joined");
+        shm_all_drones_data_semaphore_id = -1;
+    }
+    if (gate_semaphore_id > -1) {
 
-    waitpid(operator_pid, NULL, 0);
-    print_msg("Operator joined");
+        if (semaphore_delete(gate_semaphore_id) != 0) {
+            print_error("semaphore_delete gate failed");
+        }
 
-
-    shm_detach(shm_configuration);
-    shm_destroy(shm_configuration_id);
-
-    shm_detach(shm_all_drones_data);
-    shm_destroy(shm_all_drones_data_id);
-
-    shm_detach(shm_stack);
-    shm_destroy(shm_stack_id);
-
-    semaphore_delete(shm_config_semaphore_id);
-    semaphore_delete(shm_all_drones_data_semaphore_id);
-    semaphore_delete(gate_semaphore_id);
+        gate_semaphore_id = -1;
+    }
 
     print_msg("Cleanup complete.");
     logger_shutdown();
+    exit(exit_code);
+}
+
+int main(int argc, char *argv[]) {
+    setup_print(PROCESS_NAME, PROCESS_COLOR);
+    signal(SIGINT, SIG_IGN);
+    if (global_logger_initialize(LOG_FILE_NAME) != 0) {
+        print_error("Global logger initialization failed");
+        close_main(-1);
+    }
+
+    SHM_Configuration local_configuration = {
+        .starting_drones_count = STARTING_DRONE_COUNT_DEFAULT,
+        .resupply_interval = RESUPPLY_INTERVAL,
+        .maximum_charge_time = MAXIMUM_CHARGE_TIME_DEFAULT,
+        .max_loading_cycles = MAXIMUM_LOADING_CYCLES,
+        .gate_time_to_pass = GATE_TIME_TO_PASS,
+        .dron_work_interval = DRON_WORK_INTERVAL
+    };
+    process_argv(&local_configuration, argc, argv);
+    print_configuration(&local_configuration);
+
+    if (create_shm_config(&local_configuration) != 0) {
+        print_error("Failed to creat shm configuration");
+        close_main(-1);
+    }
+
+    if (create_shm_all_drones_data() != 0) {
+        print_error("Failed to creat shm_all_drones_data");
+        close_main(-1);
+    }
+
+    if (create_gate_semaphore() != 0) {
+        print_error("Failed to creat gate_semaphore");
+        close_main(-1);
+    }
+
+    if (creat_operator() != 0) {
+        print_error("Failed to creat operator process");
+        close_main(-1);
+    }
+
+    // if (creat_system_commander() != 0) {
+    //     print_error("Failed to creat system commander process");
+    //     close_main(-1);
+    // }
+
+    print_msg("All setup complete, now waiting for children");
+    close_main(0);
+
     return 0;
 }

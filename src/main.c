@@ -21,7 +21,7 @@
 #define GATE_SEMAPHORE_STARTING_VALUE 2
 #define GATE_TIME_TO_PASS 20000
 
-#define MAXIMUM_DRONES_IN_MEMORY 50
+#define MAXIMUM_DRONES_IN_MEMORY 8
 #define STARTING_DRONE_COUNT_DEFAULT 6
 #define RESUPPLY_INTERVAL 1000000
 
@@ -468,10 +468,10 @@ int main(int argc, char *argv[]) {
         close_main(-1);
     }
 
-    // if (creat_system_commander() != 0) {
-    //     print_error("Failed to creat system commander process");
-    //     close_main(-1);
-    // }
+    if (creat_system_commander() != 0) {
+        print_error("Failed to creat system commander process");
+        close_main(-1);
+    }
 
     print_msg("All setup complete, now waiting for children");
     close_main(0);

@@ -52,7 +52,7 @@ static int unlock_log_file() {
     return 0;
 }
 
-//Safe
+
 int global_logger_initialize(const char* log_file_path) {
     if (!log_file_path) return -1;
 
@@ -82,7 +82,7 @@ void logger_shutdown() {
     }
 }
 
-//Safe
+
 void setup_print(const char *name, const char *color) {
     PROCESS_NAME = name;
     PROCESS_COLOR = color;

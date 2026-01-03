@@ -18,14 +18,18 @@
 
 #define LOG_FILE_NAME "log.txt"
 
-typedef struct {
-    int starting_drones_count;
-    int resupply_interval;
-} OperatorConfiguration;
-
 static volatile sig_atomic_t got_sigusr1 = 0;
 static volatile sig_atomic_t got_sigusr2 = 0;
 static volatile sig_atomic_t got_shutdown_requested = 0;
+
+SHM_Configuration local_configuration = {0};
+
+SHM_AllDronesData *shm_all_drones_data = NULL;
+int shm_all_drones_data_id = -1;
+Stack *shm_stack = NULL;
+int shm_stack_id = -1;
+int shm_all_drones_data_semaphore_id = -1;
+
 
 void shutdown_request_handler(int sig) {
     got_shutdown_requested = 1;
@@ -39,78 +43,7 @@ void sigusr2_handler(int sig) {
     got_sigusr2 = 1;
 }
 
-int get_initial_configuration(OperatorConfiguration *out_config) {
-    const key_t shm_config_key = grab_key_from_file(CONFIG_KEY_FILE_NAME);
-    if (shm_config_key < 0) {
-        print_error("Cant grab key");
-        return -1;
-    }
-
-    const int shm_config_id = shm_get(shm_config_key);
-    if (shm_config_id < 0) {
-        print_error("Cant open shm");
-        return -1;
-    }
-
-    SHM_Configuration *p_shm_config = shm_attach(shm_config_id);
-    const int shm_config_semaphore_id = semaphore_get(shm_config_key);
-
-    if (semaphore_lock(shm_config_semaphore_id) == -1) {
-        print_error("While waiting for semaphore: semop -1");
-        return -1;
-    }
-
-    out_config->starting_drones_count = p_shm_config->starting_drones_count;
-    out_config->resupply_interval = p_shm_config->resupply_interval;
-
-    if (semaphore_unlock(shm_config_semaphore_id) == -1) {
-        print_error("While leaving semaphore: semop +1");
-        return -1;
-    }
-    shm_detach(p_shm_config);
-    return 0;
-}
-
-int get_shm_all_drones_data(SHM_AllDronesData **out_data, Stack **out_stack, int *out_stack_id, int *out_sem_id) {
-    if (!out_data || !out_sem_id) return -1;
-
-    const key_t shm_all_drones_data_key = grab_key_from_file(ALL_DRONES_DATA_FILE_NAME);
-    if (shm_all_drones_data_key < 0) {
-        print_error("Cant grab key");
-        return -1;
-    }
-
-    const int shm_all_drones_data_id = shm_get(shm_all_drones_data_key);
-    if (shm_all_drones_data_id < 0) {
-        print_error("Cant open shm");
-        return -1;
-    }
-
-    SHM_AllDronesData *p_shm_all_drones_data = shm_attach(shm_all_drones_data_id);
-
-    const key_t shm_stack_key = grab_key_from_file(STACK_KEY_FILE_NAME);
-    if (shm_stack_key < 0) {
-        print_error("Cant grab key");
-        return -1;
-    }
-
-    const int shm_stack_id = shm_get(shm_stack_key);
-    if (shm_stack_id < 0) {
-        print_error("Cant open shm");
-        return -1;
-    }
-    Stack *stack = shm_attach(shm_stack_id);
-
-
-    *out_sem_id = semaphore_get(shm_all_drones_data_key);
-
-    *out_data = p_shm_all_drones_data;
-    *out_stack = stack;
-    *out_stack_id = shm_stack_id;
-
-    return shm_all_drones_data_id;
-}
-
+//Todo Redo
 int creat_dron(const DronData_Location location) {
     const int dron_pid = fork();
 
@@ -131,8 +64,9 @@ int creat_dron(const DronData_Location location) {
     return dron_pid;
 }
 
-int generate_starting_drones(const int number_of_drones_to_create) {
-    for (int i = 0; i < number_of_drones_to_create; ++i) {
+int generate_starting_drones() {
+    print_msg("=== Commander: Generating %d starting drones ===", local_configuration.starting_drones_count);
+    for (int i = 0; i < local_configuration.starting_drones_count; ++i) {
         print_msg("Creating dron");
         if (creat_dron(LOCATION_MISSION) < 0) {
             print_error("Failed to creat starting drone");
@@ -142,7 +76,7 @@ int generate_starting_drones(const int number_of_drones_to_create) {
     return 0;
 }
 
-int describe_self(const SHM_AllDronesData *shm_all_drones_data, const int shm_all_drones_data_semaphore_id) {
+int describe_self() {
     if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
         print_error("While waiting for semaphore: semop -1");
         return -1;
@@ -162,62 +96,200 @@ int describe_self(const SHM_AllDronesData *shm_all_drones_data, const int shm_al
     return 0;
 }
 
+int close_main(const int exit_code) {
+    if (shm_all_drones_data_id > -1 && shm_all_drones_data) {
+        if (shm_detach(shm_all_drones_data) != 0) {
+            print_error("shm_detach all_drones_data failed");
+        }
+
+        shm_all_drones_data = NULL;
+        shm_all_drones_data_id = -1;
+    }
+    if (shm_stack_id > -1 && shm_stack) {
+        if (shm_detach(shm_stack) != 0) {
+            print_error("shm_detach stack failed");
+        }
+
+        shm_stack = NULL;
+        shm_stack_id = -1;
+    }
+    if (shm_all_drones_data_semaphore_id > -1) shm_all_drones_data_semaphore_id = -1;
+
+    int status;
+    while (wait(&status) > 0) {
+    };
+
+
+    logger_shutdown();
+    print_msg("Closing operator process");
+    exit(exit_code);
+}
+
+int get_configuration_from_shm_config() {
+    const key_t key = grab_key_from_file(CONFIG_KEY_FILE_NAME);
+    if (key < 0) {
+        print_error("Cant grab key from file: %s", CONFIG_KEY_FILE_NAME);
+        return -1;
+    }
+
+    const int shm_configuration_id = shm_get(key);
+    if (shm_configuration_id == -1) {
+        print_error("Cant get shm for configuration");
+        return -1;
+    }
+
+
+    const int shm_configuration_semaphore_id = semaphore_get(key);
+    if (shm_configuration_semaphore_id == -1) {
+        print_error("Cant get semaphore for configuration");
+        return -1;
+    }
+
+    SHM_Configuration *shm_configuration = shm_attach(shm_configuration_id);
+    if (!shm_configuration) {
+        print_error("Cant attach shm");
+        return -1;
+    }
+
+    if (semaphore_lock(shm_configuration_semaphore_id) == -1) {
+        print_error("While waiting for semaphore: semop -1");
+        if (shm_detach(shm_configuration) != 0) {
+            print_error("shm_detach configuration failed");
+            return -1;
+        }
+        return -1;
+    }
+
+    local_configuration = *shm_configuration;
+
+    if (semaphore_unlock(shm_configuration_semaphore_id) == -1) {
+        print_error("While waiting for semaphore: semop -1");
+        if (shm_detach(shm_configuration) != 0) {
+            print_error("shm_detach configuration failed");
+            return -1;
+        }
+        return -1;
+    }
+
+    if (shm_detach(shm_configuration) != 0) {
+        print_error("shm_detach configuration failed");
+        return -1;
+    }
+    return 0;
+}
+
+int get_shm_all_drones_data() {
+    const key_t shm_all_drones_data_key = grab_key_from_file(ALL_DRONES_DATA_FILE_NAME);
+    if (shm_all_drones_data_key < 0) {
+        print_error("Cant grab key");
+        return -1;
+    }
+
+
+    shm_all_drones_data_id = shm_get(shm_all_drones_data_key);
+    if (shm_all_drones_data_id < 0) {
+        print_error("Failed to get shm for all_drones_data");
+        return -1;
+    }
+
+    shm_all_drones_data = shm_attach(shm_all_drones_data_id);
+    if (shm_all_drones_data == NULL) {
+        print_error("Failed to attach shm for all_drones_data");
+        return -1;
+    }
+
+    const key_t shm_stack_key = grab_key_from_file(STACK_KEY_FILE_NAME);
+    if (shm_stack_key < 0) {
+        print_error("Cant grab key");
+    }
+    shm_stack_id = shm_get(shm_stack_key);
+    if (shm_stack_id < 0) {
+        print_error("Failed to get shm for stack");
+        return -1;
+    }
+    shm_stack = shm_attach(shm_stack_id);
+    if (shm_stack == NULL) {
+        print_error("Failed to attach shm for stack");
+        return -1;
+    }
+
+    shm_all_drones_data_semaphore_id = semaphore_get(shm_all_drones_data_key);
+    if (shm_all_drones_data_semaphore_id < 0) {
+        print_error("Cant get semaphore for all_drones_data");
+        return -1;
+    }
+    return 0;
+}
+
 
 int main(int argc, char *argv[]) {
     setup_print(PROCESS_NAME, PROCESS_COLOR);
-    logger_initialize(LOG_FILE_NAME);
-
-    OperatorConfiguration local_configuration;
-
-    if (get_initial_configuration(&local_configuration) == -1) {
-        //Todo
+    if (logger_initialize(LOG_FILE_NAME) != 0) {
+        print_error("Logger initialization failed");
+        close_main(EXIT_FAILURE);
     }
 
-    SHM_AllDronesData *shm_all_drones_data = NULL;
-    Stack *shm_stack = NULL;
-    int shm_stack_id = -1;
-    int shm_all_drones_data_semaphore_id = -1;
+    struct sigaction sa_shutdown = {0};
+    sa_shutdown.sa_handler = shutdown_request_handler;
 
-    const int shm_all_drones_data_id = get_shm_all_drones_data(&shm_all_drones_data,
-                                                               &shm_stack,
-                                                               &shm_stack_id,
-                                                               &shm_all_drones_data_semaphore_id);
-    if (shm_all_drones_data_id == EXIT_FAILURE) {
-        // Todo handle error
+    sigfillset(&sa_shutdown.sa_mask);
+    sa_shutdown.sa_flags = SA_RESTART;
+
+    if (sigaction(SIGINT, &sa_shutdown, NULL) == -1) {
+        print_error("sigaction(SIGINT) failed");
+        close_main(EXIT_FAILURE);
     }
 
+    if (sigaction(SIGTERM, &sa_shutdown, NULL) == -1) {
+        print_error("sigaction(SIGTERM) failed");
+        close_main(EXIT_FAILURE);
+    }
 
-    struct sigaction sig_shutdown_request;
-    sig_shutdown_request.sa_handler = shutdown_request_handler;
-    sigfillset(&sig_shutdown_request.sa_mask);
-    sig_shutdown_request.sa_flags = 0;
-    sigaction(SIGINT, &sig_shutdown_request, NULL);
-    sigaction(SIGTERM, &sig_shutdown_request, NULL);
+    struct sigaction sa_usr1 = {0};
+    sa_usr1.sa_handler = sigusr1_handler;
 
-    struct sigaction sig_add_max_drones;
-    sig_add_max_drones.sa_handler = sigusr1_handler;
-    sigemptyset(&sig_add_max_drones.sa_mask);
-    sig_add_max_drones.sa_flags = 0;
-    sigaction(SIGUSR1, &sig_add_max_drones, NULL);
+    sigemptyset(&sa_usr1.sa_mask);
+    sa_usr1.sa_flags = SA_RESTART;
 
-    struct sigaction sig_decrease_max_drones_handler;
-    sig_decrease_max_drones_handler.sa_handler = sigusr2_handler;
-    sigemptyset(&sig_decrease_max_drones_handler.sa_mask);
-    sig_decrease_max_drones_handler.sa_flags = 0;
-    sigaction(SIGUSR2, &sig_decrease_max_drones_handler, NULL);
+    if (sigaction(SIGUSR1, &sa_usr1, NULL) == -1) {
+        print_error("sigaction(SIGUSR1) failed");
+        close_main(EXIT_FAILURE);
+    }
 
-    print_msg("Generating %d starting drones.", local_configuration.starting_drones_count);
+    struct sigaction sa_usr2 = {0};
+    sa_usr2.sa_handler = sigusr2_handler;
 
-    generate_starting_drones(local_configuration.starting_drones_count);
+    sigemptyset(&sa_usr2.sa_mask);
+    sa_usr2.sa_flags = SA_RESTART;
 
-    print_msg("Starting Fabrication");
+    if (sigaction(SIGUSR2, &sa_usr2, NULL) == -1) {
+        print_error("sigaction(SIGUSR2) failed");
+        close_main(EXIT_FAILURE);
+    }
+
+    if (get_configuration_from_shm_config() != 0) {
+        print_error("Failed to get configuration from shm");
+        close_main(EXIT_FAILURE);
+    }
+
+    if (get_shm_all_drones_data() != 0) {
+        print_error("Failed to get/attach shm/semaphore");
+        close_main(EXIT_FAILURE);
+    }
+
+    if (generate_starting_drones(local_configuration.starting_drones_count) != 0) {
+        print_error("Generating drones failed");
+        close_main(EXIT_FAILURE);
+    }
+
+    print_msg("=== Operator: Starting Fabrication ===");
     while (!got_shutdown_requested) {
         if (got_sigusr1) {
             got_sigusr1 = 0;
 
             if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
                 print_error("While waiting for semaphore: semop -1");
-                return -1;
+                close_main(EXIT_FAILURE);
             }
 
             int new_max = shm_all_drones_data->maximum_dron_in_base_count * 2;
@@ -229,10 +301,10 @@ int main(int argc, char *argv[]) {
 
             if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
                 print_error("While waiting for semaphore: semop -1");
-                return -1;
+                close_main(EXIT_FAILURE);
             }
 
-            print_msg("Processed signal sig_add_max_drones");
+            print_msg("Processed signal: sig_add_max_drones");
         }
 
         if (got_sigusr2) {
@@ -240,7 +312,7 @@ int main(int argc, char *argv[]) {
 
             if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
                 print_error("While waiting for semaphore: semop -1");
-                return -1;
+                close_main(EXIT_FAILURE);
             }
 
             shm_all_drones_data->maximum_dron_in_base_count /= 2;
@@ -250,40 +322,38 @@ int main(int argc, char *argv[]) {
 
             if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
                 print_error("While waiting for semaphore: semop -1");
-                return -1;
+                close_main(EXIT_FAILURE);
             }
 
-            print_msg("Processed signal sig_decrease_max_drones");
+            print_msg("Processed signal: sig_decrease_max_drones");
         }
-
 
         if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
-
-            return -1;
+            close_main(EXIT_FAILURE);
         }
 
         if (shm_all_drones_data->dron_in_base_count + shm_all_drones_data->dron_reserving_space_count <
             shm_all_drones_data->maximum_dron_in_base_count) {
             if (creat_dron(LOCATION_BASE) < 0) {
-                print_error("Failed to creat a drone");
-            };
+                print_msg_color(COLOR_SKY_BLUE, "Failed to creat a drone");
+                //We dont stop program on this
+            }
         }
 
         if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
-            return -1;
+            close_main(EXIT_FAILURE);
         }
 
-        describe_self(shm_all_drones_data, shm_all_drones_data_semaphore_id);
+        if (describe_self() != 0) {
+            print_error("Describing self failed");
+            close_main(EXIT_FAILURE);
+        }
 
         usleep(local_configuration.resupply_interval);
     }
 
-    int status;
-    while (wait(&status) > 0) {
-    };
-    print_msg("Closing operator process");
-    logger_shutdown();
+    close_main(EXIT_SUCCESS);
     return 0;
 }

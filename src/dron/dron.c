@@ -262,6 +262,7 @@ void *battery(void *arg) {
         if (is_charging) usleep(battery_thread_args->charge_interval);
         else usleep(battery_thread_args->usage_interval);
     }
+    return NULL;
 }
 
 int pass_the_gate() {
@@ -502,10 +503,6 @@ int try_adding_self_to_shm() {
     }
     return 0;
 }
-
-
-
-
 
 int main(int argc, char *argv[]) {
     setup_print(PROCESS_NAME, PROCESS_COLOR);

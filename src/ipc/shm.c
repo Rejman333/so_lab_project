@@ -10,16 +10,16 @@
 int shm_create(const key_t key, const size_t size) {
     const int shm_id = shmget(key, size, 0600 | IPC_CREAT | IPC_EXCL);
     if (shm_id == -1) {
-        print_error("Failed to create sheared memory");
+        print_error("Failed to create shared memory");
         return -1;
     }
     return shm_id;
 };
 
 int shm_get(const key_t key) {
-    const int shm_id = shmget(key, 0, 0600);
+    const int shm_id = shmget(key, 0, 0);
     if (shm_id == -1) {
-        print_error("Failed to open sheared memory");
+        print_error("Failed to open shared memory");
         return -1;
     }
     return shm_id;
@@ -29,7 +29,7 @@ void *shm_attach(const int shm_id) {
     void *addr = shmat(shm_id, NULL, 0);
 
     if (addr == (void *) -1) {
-        print_error("Failed to attach sheared memory");
+        print_error("Failed to attach shared memory");
         return NULL;
     }
 
@@ -38,7 +38,7 @@ void *shm_attach(const int shm_id) {
 
 int shm_detach(const void *addr) {
     if (shmdt(addr) == -1) {
-        print_error("Failed to detach sheared memory");
+        print_error("Failed to detach shared memory");
         return -1;
     }
     return 0;
@@ -47,7 +47,7 @@ int shm_detach(const void *addr) {
 int shm_destroy(const int shm_id) {
     // Mark for deletion
     if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
-        print_error("Failed to destroy sheared memory");
+        print_error("Failed to destroy shared memory");
         return -1;
     }
     return 0;

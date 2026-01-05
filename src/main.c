@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/wait.h>
 
 #include "ipc.h"
@@ -14,6 +15,8 @@
 #define ALL_DRONES_DATA_FILE_NAME "dron_info_key"
 #define STACK_KEY_FILE_NAME "stack_key"
 #define GATE_KEY_FILE_NAME "gate_key"
+#define GATE_FIFO_FILE_NAME "/tmp/gate_fifo"
+
 
 #define PROCESS_NAME "Main"
 #define PROCESS_COLOR COLOR_BLUE
@@ -45,6 +48,11 @@ int gate_semaphore_id = -1;
 
 int operator_pid = -1;
 int system_commander_pid = -1;
+
+FIFO_SEM fifo_sem = {
+    .capacity = -1,
+    .file_descriptor = -1,
+};
 
 static int parse_positive_int(const char *arg, const char *name) {
     char *end;
@@ -161,7 +169,7 @@ int creat_operator() {
             print_error("sigprocmask failed");
             _exit(1);
         }
-        execl("./operator", "./operator", (char *)NULL);
+        execl("./operator", "./operator", (char *) NULL);
 
         print_error("exec operator failed");
         _exit(1);
@@ -197,12 +205,12 @@ int creat_system_commander() {
             _exit(1);
         }
 
-        if (n >= (int)sizeof(op_pid_str)) {
+        if (n >= (int) sizeof(op_pid_str)) {
             print_error("operator_pid string truncated");
             _exit(1);
         }
 
-        execl("./system_commander", "./system_commander", op_pid_str, (char *)NULL);
+        execl("./system_commander", "./system_commander", op_pid_str, (char *) NULL);
 
         print_error("exec system_commander failed");
         _exit(1);
@@ -326,6 +334,14 @@ int create_gate_semaphore() {
     return 0;
 }
 
+int create_gate_fifo_sem() {
+    if (fifo_sem_create(&fifo_sem,GATE_FIFO_FILE_NAME, 2) != 0) {
+        print_error("Cant creat FIFO_SEM for gate");
+        return -1;
+    }
+    return 0;
+}
+
 int close_main(const int exit_code) {
     int status;
     if (system_commander_pid > -1) {
@@ -345,7 +361,6 @@ int close_main(const int exit_code) {
         system_commander_pid = -1;
     }
     if (operator_pid > -1) {
-
         pid_t r = waitpid(operator_pid, &status, 0);
 
         if (r == -1) {
@@ -363,7 +378,6 @@ int close_main(const int exit_code) {
         operator_pid = -1;
     }
     if (shm_configuration_id > -1 && shm_configuration) {
-
         if (shm_detach(shm_configuration) != 0) {
             print_error("shm_detach configuration failed");
         }
@@ -376,7 +390,6 @@ int close_main(const int exit_code) {
         shm_configuration_id = -1;
     }
     if (shm_all_drones_data_id > -1 && shm_all_drones_data) {
-
         if (shm_detach(shm_all_drones_data) != 0) {
             print_error("shm_detach all_drones_data failed");
         }
@@ -389,7 +402,6 @@ int close_main(const int exit_code) {
         shm_all_drones_data_id = -1;
     }
     if (shm_stack_id > -1 && shm_stack) {
-
         if (shm_detach(shm_stack) != 0) {
             print_error("shm_detach stack failed");
         }
@@ -408,7 +420,6 @@ int close_main(const int exit_code) {
         shm_configuration_semaphore_id = -1;
     }
     if (shm_all_drones_data_semaphore_id > -1) {
-
         if (semaphore_delete(shm_all_drones_data_semaphore_id) != 0) {
             print_error("semaphore_delete all_drones_data failed");
         }
@@ -416,12 +427,19 @@ int close_main(const int exit_code) {
         shm_all_drones_data_semaphore_id = -1;
     }
     if (gate_semaphore_id > -1) {
-
         if (semaphore_delete(gate_semaphore_id) != 0) {
             print_error("semaphore_delete gate failed");
         }
 
         gate_semaphore_id = -1;
+    }
+    if (fifo_sem.file_descriptor > 0) {
+        if (fifo_sem_destroy(&fifo_sem) != 0) {
+            print_error("fifo_sem gate failed at destruction");
+        }
+
+        memset(&fifo_sem, 0, sizeof(fifo_sem));
+        fifo_sem.file_descriptor = -1;
     }
 
     print_msg("Cleanup complete.");
@@ -460,6 +478,11 @@ int main(int argc, char *argv[]) {
 
     if (create_gate_semaphore() != 0) {
         print_error("Failed to creat gate_semaphore");
+        close_main(-1);
+    }
+
+    if (create_gate_fifo_sem() != 0) {
+        print_error("Failed to creat gate_fifo_sem");
         close_main(-1);
     }
 

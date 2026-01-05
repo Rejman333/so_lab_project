@@ -93,3 +93,21 @@ int SHM_AllDronesData_delete_drone(SHM_AllDronesData *p_shm_all_drones_data, Sta
                                    int has_space_reserved);
 
 int SHM_AllDronesData_get_dron_pid(const SHM_AllDronesData *p_shm_all_drones_data);
+
+typedef struct {
+    char   path[4096];
+    int    file_descriptor;
+    int    capacity;
+} FIFO_SEM;
+
+int fifo_sem_create(FIFO_SEM *fifo_sem, const char *path, const int capacity);
+
+int fifo_sem_get(FIFO_SEM *fifo_sem, const char *path);
+
+int fifo_sem_lock(FIFO_SEM *fifo_sem);
+
+int fifo_sem_unlock(FIFO_SEM *fifo_sem);
+
+int fifo_sem_close(FIFO_SEM *fifo_sem);
+
+int fifo_sem_destroy(FIFO_SEM *fifo_sem);

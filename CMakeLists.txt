@@ -22,6 +22,7 @@ add_library(ipc
         ${SRC_DIR}/ipc/key.c
         ${SRC_DIR}/ipc/semaphore.c
         ${SRC_DIR}/ipc/shm.c
+        ${SRC_DIR}/ipc/fifo.c
 
 )
 

@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <pthread.h>
+#include <string.h>
 #include <time.h>
 
 #include "ipc.h"
@@ -18,6 +19,8 @@
 #define PROCESS_COLOR COLOR_MAGENTA
 
 #define LOG_FILE_NAME "log.txt"
+
+#define GATE_FIFO_FILE_NAME "/tmp/gate_fifo"
 
 typedef struct {
     int my_id;
@@ -58,6 +61,10 @@ static volatile sig_atomic_t battery_working = 0;
 
 int gate_semaphore_id = -1;
 
+FIFO_SEM fifo_sem = {
+    .file_descriptor = -1,
+};
+
 
 int close_main(const int exit_code) {
     if (shm_all_drones_data_id > -1 && shm_all_drones_data) {
@@ -75,6 +82,14 @@ int close_main(const int exit_code) {
 
         shm_stack = NULL;
         shm_stack_id = -1;
+    }
+    if (fifo_sem.file_descriptor > 0) {
+        if (fifo_sem_close(&fifo_sem) != 0) {
+            print_error("Failed to close fifo_sem");
+        }
+
+        memset(&fifo_sem, 0, sizeof(fifo_sem));
+        fifo_sem.file_descriptor = -1;
     }
 
     shm_all_drones_data_semaphore_id = -1;
@@ -244,6 +259,14 @@ int get_initial_configuration() {
     return 0;
 }
 
+int get_gate_fifo_sem() {
+    if (fifo_sem_get(&fifo_sem,GATE_FIFO_FILE_NAME) != 0) {
+        print_error("Cant get FIFO_SEM for gate");
+        return -1;
+    }
+    return 0;
+}
+
 
 void *battery(void *arg) {
     const BatteryThreadArgs *battery_thread_args = (BatteryThreadArgs *) arg;
@@ -277,6 +300,23 @@ int pass_the_gate() {
 
     if (semaphore_unlock(gate_semaphore_id) == -1) {
         print_error("While waiting for semaphore: semop -1");
+        return -1;
+    }
+    return 0;
+}
+
+int pass_the_gate_fifo() {
+    if (fifo_sem_lock(&fifo_sem) == -1) {
+        print_error("Error while waiting for fifi_sem");
+        return -1;
+    }
+
+    print_msg_color(COLOR_RED, "Entered the gate");
+    usleep(dron_internal_data.gate_time_to_pass);
+    print_msg_color(COLOR_RED, "Left the gate");
+
+    if (fifo_sem_unlock(&fifo_sem) == -1) {
+        print_error("Error while unlocking fifo");
         return -1;
     }
     return 0;
@@ -386,7 +426,13 @@ int force_base_return() {
             return -1;
         }
 
-        if (pass_the_gate(gate_semaphore_id, dron_internal_data.gate_time_to_pass) != 0) {
+        // if (pass_the_gate() != 0) {
+        //     print_error("Error while passing the gate");
+        //
+        //     return -1;
+        // };
+
+        if (pass_the_gate_fifo() != 0) {
             print_error("Error while passing the gate");
 
             return -1;
@@ -556,6 +602,11 @@ int main(int argc, char *argv[]) {
 
     if (get_gate_semaphore() != 0) {
         print_error("Failed to gate gate_semaphore");
+        close_main(EXIT_FAILURE);
+    }
+
+    if (get_gate_fifo_sem() != 0) {
+        print_error("Failed to gate gate_fifi_sem");
         close_main(EXIT_FAILURE);
     }
 

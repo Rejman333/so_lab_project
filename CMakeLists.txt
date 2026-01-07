@@ -5,6 +5,8 @@ set(CMAKE_C_STANDARD 11)
 
 set(SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 
+find_package(Threads REQUIRED)
+
 add_library(stack
         ${SRC_DIR}/data_structures/stack.c
 )
@@ -53,6 +55,7 @@ add_executable(dron
 )
 
 target_link_libraries(dron
+        PRIVATE Threads::Threads
         printer
         ipc
 )

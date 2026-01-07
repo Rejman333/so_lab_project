@@ -58,7 +58,7 @@ int global_logger_initialize(const char* log_file_path) {
 
     log_file_descriptor = open(
         log_file_path,
-        O_WRONLY | O_CREAT | O_TRUNC | O_APPEND,
+        O_WRONLY | O_CREAT | O_TRUNC | O_APPEND | O_CLOEXEC,
         0600
     );
     return (log_file_descriptor < 0) ? -1 : 0;
@@ -69,7 +69,7 @@ int logger_initialize(const char* log_file_path) {
 
     log_file_descriptor = open(
         log_file_path,
-        O_WRONLY | O_CREAT | O_APPEND,
+        O_WRONLY | O_CREAT | O_APPEND| O_CLOEXEC,
         0600
     );
     return (log_file_descriptor < 0) ? -1 : 0;

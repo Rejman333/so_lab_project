@@ -615,11 +615,6 @@ int main(int argc, char *argv[]) {
     dron_local_data.location = starting_location;
     dron_local_data.pid = getpid();
 
-    if (try_adding_self_to_shm() != 0) {
-        close_main(EXIT_FAILURE);
-    }
-
-
     BatteryThreadArgs battery_thread_args = {
         .charge_interval = dron_internal_data.maximum_charge_time / 100,
         .usage_interval = (int) ((dron_internal_data.maximum_charge_time * 2.5) / 100.)
@@ -630,7 +625,12 @@ int main(int argc, char *argv[]) {
         close_main(EXIT_FAILURE);
     }
 
+    if (try_adding_self_to_shm() != 0) {
+        close_main(EXIT_FAILURE);
+    }
+
     print_msg("Started with id: %d, with index of: %d", dron_internal_data.my_id, dron_internal_data.my_index);
+
 
     while (!got_shutdown_requested) {
         if (got_sigusr1) {
@@ -640,12 +640,12 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        if (got_sigusr1) {
-            if (battery_state_check() != 0) {
-                print_error("Battery check failed");
-                close_main(EXIT_FAILURE);
-            }
+
+        if (battery_state_check() != 0) {
+            print_error("Battery check failed");
+            close_main(EXIT_FAILURE);
         }
+
 
         if (dron_internal_data.location == LOCATION_MISSION) {
             if (force_base_return() != 0) {

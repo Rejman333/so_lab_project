@@ -54,6 +54,8 @@ FIFO_SEM fifo_sem = {
     .file_descriptor = -1,
 };
 
+int maximum_drones_in_memory = MAXIMUM_DRONES_IN_MEMORY;
+
 static int parse_positive_int(const char *arg, const char *name) {
     char *end;
 
@@ -78,16 +80,16 @@ static void print_usage(const char *program_name) {
             "  -l <count>   max loading cycles\n"
             "  -g <time>    gate time to pass\n"
             "  -w <time>    drone work interval\n"
+            "  -m <count>   maximum drones in memory\n"
             "  -h           show this help message\n",
             program_name
     );
 }
 
-//TODO debag work on that
 void process_argv(SHM_Configuration *cfg, int argc, char *argv[]) {
     int opt;
 
-    while ((opt = getopt(argc, argv, "n:r:c:l:g:w:h")) != -1) {
+    while ((opt = getopt(argc, argv, "n:r:c:l:g:w:m:h")) != -1) {
         switch (opt) {
             case 'n':
                 cfg->starting_drones_count =
@@ -118,6 +120,10 @@ void process_argv(SHM_Configuration *cfg, int argc, char *argv[]) {
                 cfg->dron_work_interval =
                         parse_positive_int(optarg, "dron_work_interval");
                 break;
+            case 'm':
+                maximum_drones_in_memory =
+                        parse_positive_int(optarg, "maximum_drones_in_memory");
+                break;
 
             case 'h':
                 print_usage(argv[0]);
@@ -143,12 +149,13 @@ void print_configuration(const SHM_Configuration *cfg) {
 
     print_msg("=== Starting Configuration ===");
 
-    print_msg("starting_drones_count  = %d", cfg->starting_drones_count);
-    print_msg("resupply_interval      = %d", cfg->resupply_interval);
-    print_msg("maximum_charge_time    = %d", cfg->maximum_charge_time);
-    print_msg("max_loading_cycles     = %d", cfg->max_loading_cycles);
-    print_msg("gate_time_to_pass      = %d", cfg->gate_time_to_pass);
-    print_msg("dron_work_interval     = %d", cfg->dron_work_interval);
+    print_msg("starting_drones_count    = %d", cfg->starting_drones_count);
+    print_msg("resupply_interval        = %d", cfg->resupply_interval);
+    print_msg("maximum_charge_time      = %d", cfg->maximum_charge_time);
+    print_msg("max_loading_cycles       = %d", cfg->max_loading_cycles);
+    print_msg("gate_time_to_pass        = %d", cfg->gate_time_to_pass);
+    print_msg("dron_work_interval       = %d", cfg->dron_work_interval);
+    print_msg("maximum_drones_in_memory = %d", maximum_drones_in_memory);
 }
 
 int creat_operator() {
@@ -259,7 +266,7 @@ int create_shm_all_drones_data() {
         return -1;
     }
 
-    size_t bytes_needed = sizeof(SHM_AllDronesData) + MAXIMUM_DRONES_IN_MEMORY * sizeof(DronData);
+    size_t bytes_needed = sizeof(SHM_AllDronesData) + maximum_drones_in_memory * sizeof(DronData);
     shm_all_drones_data_id = shm_create(shm_all_drones_data_key, bytes_needed);
     if (shm_all_drones_data_id < 0) {
         print_error("Failed to create shm for all_drones_data");
@@ -273,7 +280,7 @@ int create_shm_all_drones_data() {
     }
 
     *shm_all_drones_data = (SHM_AllDronesData){
-        .capacity = MAXIMUM_DRONES_IN_MEMORY,
+        .capacity = maximum_drones_in_memory,
         .next_dron_id = 0,
         .dron_in_base_count = 0,
         .maximum_dron_in_base_count = (STARTING_DRONE_COUNT_DEFAULT / 2) - 1,
@@ -282,7 +289,7 @@ int create_shm_all_drones_data() {
         .dron_reserving_space_count = 0
     };
 
-    bytes_needed = Stack_bytes_needed(MAXIMUM_DRONES_IN_MEMORY, sizeof(int));
+    bytes_needed = Stack_bytes_needed(maximum_drones_in_memory, sizeof(int));
 
     const key_t shm_stack_key = grab_key_from_file(STACK_KEY_FILE_NAME);
     if (shm_stack_key < 0) {
@@ -300,12 +307,12 @@ int create_shm_all_drones_data() {
     }
 
 
-    if (Stack_init(shm_stack, MAXIMUM_DRONES_IN_MEMORY, sizeof(int)) == STACK_ERROR) {
+    if (Stack_init(shm_stack, maximum_drones_in_memory, sizeof(int)) == STACK_ERROR) {
         print_error("Stack Failed with initialization");
         return -1;
     }
 
-    int index = MAXIMUM_DRONES_IN_MEMORY - 1;
+    int index = maximum_drones_in_memory - 1;
     while (!Stack_is_full(shm_stack)) {
         Stack_push(shm_stack, &index);
         index--;

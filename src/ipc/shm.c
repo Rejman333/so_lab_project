@@ -57,8 +57,6 @@ const char *DronData_LocationToString(const DronData_Location location) {
     switch (location) {
         case LOCATION_UNDEFINE: return "LOCATION_UNDEFINE";
         case LOCATION_BASE: return "LOCATION_BASE";
-        case LOCATION_LEAVING_BASE: return "LOCATION_LEAVING_BASE";
-        case LOCATION_ENTERING_BASE: return "LOCATION_ENTERING_BASE";
         case LOCATION_MISSION: return "LOCATION_MISSION";
         default: return "UNKNOWN_LOCATION";
     }

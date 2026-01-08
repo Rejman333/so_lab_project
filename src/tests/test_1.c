@@ -4,12 +4,9 @@
 #include "ipc.h"
 #include "printer.h"
 
-#define CONFIG_KEY_FILE_NAME "config_key"
-#define ALL_DRONES_DATA_FILE_NAME "dron_info_key"
-#define STACK_KEY_FILE_NAME "stack_key"
-#define GATE_KEY_FILE_NAME "gate_key"
-#define GATE_FIFO_FILE_NAME "/tmp/gate_fifo"
 
+#define ALL_DRONES_DATA_FILE_NAME "dron_info_key_test"
+#define STACK_KEY_FILE_NAME "stack_key_test"
 
 #define PROCESS_NAME "Test_1"
 #define PROCESS_COLOR COLOR_BLUE

@@ -216,12 +216,52 @@ int mission_step_decrease_drones(const pid_t op_pid, const int repeats, const in
     return 0;
 }
 
+int mission_step_decrease_drones_to_0(const pid_t op_pid, const int delay_sec) {
+    print_msg("Step: Decreasing drones (every %ds)", delay_sec);
+
+    if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
+        print_error("Mission: semaphore_lock failed");
+        return -1;
+    }
+    int maximum_dron_in_base_count = shm_all_drones_data->maximum_dron_in_base_count;
+    if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
+        print_error("Mission: semaphore_unlock failed");
+        return -1;
+    }
+
+    while (maximum_dron_in_base_count > 0) {
+        if (got_shutdown_requested) return 0;
+
+        if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
+            print_error("Mission: semaphore_lock failed");
+            return -1;
+        }
+
+        maximum_dron_in_base_count = shm_all_drones_data->maximum_dron_in_base_count;
+
+        if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
+            print_error("Mission: semaphore_unlock failed");
+            return -1;
+        }
+
+        if (send_subtract_drones(op_pid) == -1) {
+            print_error("Mission: send_subtract_drones failed");
+        }
+
+        int w = mission_wait_seconds_interruptible(delay_sec);
+        if (w == 1) return 0;
+        if (w == -1) return -1;
+    }
+
+    return 0;
+}
+
 int run_mission_plan(const pid_t op_pid) {
     print_msg("=== Mission Plan: START ===");
 
     if (mission_step_increase_drones(op_pid, 3, 5) == -1) return -1;
     if (mission_step_kill_drones(10, 5) == -1) return -1;
-    if (mission_step_decrease_drones(op_pid, 10, 5) == -1) return -1;
+    if (mission_step_decrease_drones_to_0(op_pid, 5) == -1) return -1;
 
     print_msg("=== Mission Plan: FINISHED ===");
     return 0;

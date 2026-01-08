@@ -47,13 +47,9 @@ void sigusr2_handler(int sig) {
 }
 
 int creat_dron(const DronData_Location location) {
-    // CHANGED: fork() może zwrócić -1 (np. limit procesów/pids, ENOMEM).
-    // Musimy to obsłużyć, bo inaczej caller dostanie "jakiś PID" i będzie żył w błędzie.
     pid_t pid = fork();
 
     if (pid < 0) {
-        // CHANGED: logujemy przyczynę (errno) i zwracamy błąd.
-        // Typowe errno: EAGAIN (limit procesów), ENOMEM.
         print_error("fork dron failed");
         return -1;
     }
@@ -348,16 +344,19 @@ int main(int argc, char *argv[]) {
             }
 
             shm_all_drones_data->maximum_dron_in_base_count /= 2;
-            if (shm_all_drones_data->maximum_dron_in_base_count <= 0) {
-                got_shutdown_requested = 1;
-            }
+            int new_max = shm_all_drones_data->maximum_dron_in_base_count;
 
             if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
                 print_error("While waiting for semaphore: semop -1");
                 close_main(EXIT_FAILURE);
             }
 
-            print_msg("Processed signal: sig_decrease_max_drones");
+            if (new_max <= 0) {
+                got_shutdown_requested = 1;
+                print_msg("maximum_dron_in_base_count <= 0, shutdown_started");
+            }
+
+            print_msg("Processed signal: sig_decrease_max_drones, new maximum_dron_in_base_count %d", new_max);
         }
 
         if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {

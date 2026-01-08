@@ -24,8 +24,8 @@
 #define GATE_SEMAPHORE_STARTING_VALUE 2
 #define GATE_TIME_TO_PASS 20000
 
-#define MAXIMUM_DRONES_IN_MEMORY 8
-#define STARTING_DRONE_COUNT_DEFAULT 6
+#define MAXIMUM_DRONES_IN_MEMORY 600
+#define STARTING_DRONE_COUNT_DEFAULT 300
 #define RESUPPLY_INTERVAL 1000000
 
 #define DRON_WORK_INTERVAL 500000
@@ -259,7 +259,7 @@ int create_shm_config(SHM_Configuration *local_configuration) {
     return 0;
 }
 
-int create_shm_all_drones_data() {
+int create_shm_all_drones_data(SHM_Configuration* local_configuration) {
     const key_t shm_all_drones_data_key = grab_key_from_file(ALL_DRONES_DATA_FILE_NAME);
     if (shm_all_drones_data_key < 0) {
         print_error("Cant grab key");
@@ -283,7 +283,7 @@ int create_shm_all_drones_data() {
         .capacity = maximum_drones_in_memory,
         .next_dron_id = 0,
         .dron_in_base_count = 0,
-        .maximum_dron_in_base_count = (STARTING_DRONE_COUNT_DEFAULT / 2) - 1,
+        .maximum_dron_in_base_count = (local_configuration->starting_drones_count / 2) - 1,
         .drone_lost_count = 0,
         .dron_count = 0,
         .dron_reserving_space_count = 0
@@ -478,7 +478,7 @@ int main(int argc, char *argv[]) {
         close_main(-1);
     }
 
-    if (create_shm_all_drones_data() != 0) {
+    if (create_shm_all_drones_data(&local_configuration) != 0) {
         print_error("Failed to creat shm_all_drones_data");
         close_main(-1);
     }

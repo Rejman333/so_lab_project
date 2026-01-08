@@ -17,8 +17,6 @@ typedef struct {
 typedef enum {
     LOCATION_UNDEFINE,
     LOCATION_BASE,
-    LOCATION_LEAVING_BASE,
-    LOCATION_ENTERING_BASE,
     LOCATION_MISSION
 } DronData_Location;
 

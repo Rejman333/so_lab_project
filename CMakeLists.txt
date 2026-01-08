@@ -80,12 +80,11 @@ target_link_libraries(system_commander
         ipc
 )
 
-add_executable(test
-        ${SRC_DIR}/test_stack.c
+add_executable(test_1
+        ${SRC_DIR}/tests/test_1.c
 )
 
-target_link_libraries(test
+target_link_libraries(test_1
         printer
-        stack
         ipc
 )

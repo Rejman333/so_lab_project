@@ -75,10 +75,10 @@ static void print_usage(const char *program_name) {
             "Usage: %s [options]\n"
             "Options:\n"
             "  -n <count>   starting drones count\n"
-            "  -r <time>    resupply interval\n"
-            "  -c <time>    maximum charge time\n"
+            "  -r <time>    resupply interval(µs)\n"
+            "  -c <time>    maximum charge time(µs)\n"
             "  -l <count>   max loading cycles\n"
-            "  -g <time>    gate time to pass\n"
+            "  -g <time>    gate time to pass(µs)\n"
             "  -w <time>    drone work interval\n"
             "  -m <count>   maximum drones in memory\n"
             "  -h           show this help message\n",

@@ -79,6 +79,7 @@ int creat_dron(const DronData_Location location) {
 int generate_starting_drones() {
     print_msg("=== Commander: Generating %d starting drones ===", local_configuration.starting_drones_count);
     for (int i = 0; i < local_configuration.starting_drones_count; ++i) {
+        if (got_shutdown_requested) return 0;
         print_msg("Creating dron");
         if (creat_dron(LOCATION_MISSION) < 0) {
             print_error("Failed to creat starting drone");
@@ -257,6 +258,17 @@ int main(int argc, char *argv[]) {
         close_main(EXIT_FAILURE);
     }
 
+    struct sigaction sa_sigchld = {0};
+    sa_sigchld.sa_handler = SIG_IGN;
+
+    sigemptyset(&sa_sigchld.sa_mask);
+    sa_sigchld.sa_flags = SA_RESTART;
+
+    if (sigaction(SIGCHLD, &sa_sigchld, NULL) == -1) {
+        print_error("sigaction(SIGCHLD) failed");
+        close_main(EXIT_FAILURE);
+    }
+
     struct sigaction sa_shutdown = {0};
     sa_shutdown.sa_handler = shutdown_request_handler;
 
@@ -359,6 +371,7 @@ int main(int argc, char *argv[]) {
             print_msg("Processed signal: sig_decrease_max_drones, new maximum_dron_in_base_count %d", new_max);
         }
 
+
         if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
             close_main(EXIT_FAILURE);
@@ -387,6 +400,7 @@ int main(int argc, char *argv[]) {
             close_main(EXIT_FAILURE);
         }
 
+        //reap_children_nonblocking();
         usleep(local_configuration.resupply_interval);
     }
 

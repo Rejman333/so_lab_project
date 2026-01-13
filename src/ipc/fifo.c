@@ -6,6 +6,8 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <poll.h>
+
 
 
 int fifo_sem_create(FIFO_SEM *fifo_sem, const char *path, const int capacity) {
@@ -223,4 +225,39 @@ int fifo_sem_destroy(FIFO_SEM *fifo_sem) {
         return -1;
     }
     return 0;
+}
+
+int fifo_sem_lock_timeout(FIFO_SEM *fifo_sem, const int timeout_ms) {
+    if (!fifo_sem || fifo_sem->file_descriptor < 0) {
+        print_error("Unable to work with incomplete fifo_sem");
+        return -1;
+    }
+
+    struct pollfd pfd;
+    pfd.fd = fifo_sem->file_descriptor;
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+
+    for (;;) {
+        int prc = poll(&pfd, 1, timeout_ms);
+
+        if (prc == 0) {
+            return 1;
+        }
+
+        if (prc == -1) {
+            if (errno == EINTR) continue;
+            return -1;
+        }
+
+        char token;
+        for (;;) {
+            ssize_t r = read(fifo_sem->file_descriptor, &token, 1);
+            if (r == 1) return 0;
+            if (r == -1 && errno == EINTR) continue;
+
+            print_error("Error while reading token");
+            return -1;
+        }
+    }
 }

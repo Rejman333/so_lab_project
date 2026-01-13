@@ -306,8 +306,13 @@ int pass_the_gate() {
 }
 
 int pass_the_gate_fifo() {
-    if (fifo_sem_lock(&fifo_sem) == -1) {
-        print_error("Error while waiting for fifi_sem");
+    int rc = fifo_sem_lock_timeout(&fifo_sem, 100);
+    if (rc == 1) {
+        print_msg_color(COLOR_YELLOW, "Timeout: could not enter the gate, giving up");
+        return 1;
+    }
+    if (rc == -1) {
+        print_error("Error while waiting for fifo_sem");
         return -1;
     }
 
@@ -362,7 +367,7 @@ int battery_state_check() {
             return -1;
         }
 
-        SHM_AllDronesData_delete_drone(shm_all_drones_data, shm_stack, dron_internal_data.my_id,
+        SHM_AllDronesData_delete_drone(shm_all_drones_data, shm_stack, dron_internal_data.my_index,
                                        dron_internal_data.have_reserved_space);
 
         if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
@@ -407,34 +412,33 @@ int force_base_return() {
             return -1;
         }
 
-        if (shm_all_drones_data->dron_in_base_count + shm_all_drones_data->dron_reserving_space_count <
+        if ( dron_internal_data.have_reserved_space != 1) {
+            if (shm_all_drones_data->dron_in_base_count + shm_all_drones_data->dron_reserving_space_count <
             shm_all_drones_data->maximum_dron_in_base_count) {
-            shm_all_drones_data->dron_reserving_space_count++;
-            dron_internal_data.have_reserved_space = 1;
-            print_msg("Reserved space");
-        } else {
-            print_msg("Failed to reserve space");
-            if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
-                print_error("While waiting for semaphore: semop -1");
-                return -1;
+                shm_all_drones_data->dron_reserving_space_count++;
+                dron_internal_data.have_reserved_space = 1;
+                print_msg("Reserved space, waiting for gate");
+            } else {
+                print_msg("Failed to reserve space");
+                if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
+                    print_error("While waiting for semaphore: semop -1");
+                    return -1;
+                }
+                return 0;
             }
-            return 0;
         }
+
 
         if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
             return -1;
         }
 
-        // if (pass_the_gate() != 0) {
-        //     print_error("Error while passing the gate");
-        //
-        //     return -1;
-        // };
-
-        if (pass_the_gate_fifo() != 0) {
+        int result = pass_the_gate_fifo();
+        if (result == 1) {
+            return 0;
+        }if (result != 0) {
             print_error("Error while passing the gate");
-
             return -1;
         };
 
@@ -465,9 +469,15 @@ int force_leave_base() {
 
 
     if (dron_internal_data.location == LOCATION_BASE && current_battery_percentage >= 100) {
-        print_msg_color(COLOR_YELLOW, "Going for a mission");
+        print_msg_color(COLOR_YELLOW, "Going for a mission, waiting for gate");
 
-        pass_the_gate(gate_semaphore_id, dron_internal_data.gate_time_to_pass);
+        int result = pass_the_gate_fifo();
+        if (result == 1) {
+            return 0;
+        }if (result != 0) {
+            print_error("Error while passing the gate");
+            return -1;
+        };
 
         if (semaphore_lock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
@@ -492,11 +502,13 @@ void describe_self() {
     pthread_mutex_unlock(&m);
 
     print_msg(
-        "ID: %3d | Battery: %3d%%[%2d] | %s",
+        "ID: %3d | Battery: %3d%%[%2d] | %s | Index: %d | Has space reserved %d",
         dron_internal_data.my_id,
         current_battery_percentage,
         dron_internal_data.loading_cycles_left,
-        DronData_LocationToString(dron_internal_data.location)
+        DronData_LocationToString(dron_internal_data.location),
+        dron_internal_data.my_index,
+        dron_internal_data.have_reserved_space
     );
 }
 
@@ -648,12 +660,12 @@ int main(int argc, char *argv[]) {
 
 
         if (dron_internal_data.location == LOCATION_MISSION) {
-            if (force_base_return() != 0) {
+            if (force_base_return() < 0) {
                 print_error("Failed base return");
                 close_main(EXIT_FAILURE);
             }
         } else if (dron_internal_data.location == LOCATION_BASE) {
-            if (force_leave_base() != 0) {
+            if (force_leave_base() < 0) {
                 print_error("Failed base return");
                 close_main(EXIT_FAILURE);
             }

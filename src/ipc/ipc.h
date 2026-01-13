@@ -49,7 +49,7 @@ union semun {
 
 
 #define SEM_LOCK   ((struct sembuf){0, -1, SEM_UNDO})
-#define SEM_UNLOCK ((struct sembuf){0, +1, 0})
+#define SEM_UNLOCK ((struct sembuf){0, +1, SEM_UNDO})
 
 const char *DronData_LocationToString(const DronData_Location location);
 
@@ -109,3 +109,5 @@ int fifo_sem_unlock(FIFO_SEM *fifo_sem);
 int fifo_sem_close(FIFO_SEM *fifo_sem);
 
 int fifo_sem_destroy(FIFO_SEM *fifo_sem);
+
+int fifo_sem_lock_timeout(FIFO_SEM *fifo_sem, const int timeout_ms);

@@ -196,7 +196,7 @@ int main() {
 
     print_msg_color(COLOR_TURQUOISE, "=== Test SHM_Drones and SHM_Stack  CRUD===");
 
-    DronData dron_data = {.id = 1, .pid = 333, .location = LOCATION_MISSION};
+    DronData dron_data = {.id = 1, .pid = 333, .location = LOCATION_BASE};
     int dron_index = SHM_AllDronesData_add_dron(shm_all_drones_data, shm_stack, &dron_data);
     if (dron_index == -1) {
         print_msg_color(COLOR_RED, "FAILURE: Adding dron to SHM");
@@ -211,7 +211,7 @@ int main() {
         test_cleen_up();
     }
 
-    if (shm_all_drones_data->dron_count != 1 || shm_all_drones_data->dron_in_base_count != 0) {
+    if (shm_all_drones_data->dron_count != 1 || shm_all_drones_data->dron_in_base_count != 1) {
         print_msg_color(COLOR_RED, "FAILURE: Adding dron to SHM, failed to set meta data");
         errors_found++;
         test_cleen_up();
@@ -220,7 +220,7 @@ int main() {
     print_msg_color(COLOR_GREEN, "SUCCESS: Dron added at index: %d", dron_index);
     success_found++;
 
-    if (SHM_AllDronesData_update_dron_location(shm_all_drones_data, dron_index, LOCATION_BASE) != 0) {
+    if (SHM_AllDronesData_update_dron_location(shm_all_drones_data, dron_index, LOCATION_MISSION) != 0) {
         print_msg_color(COLOR_RED, "FAILURE: Updating dron in SHM at index :%d", dron_index);
         errors_found++;
     };

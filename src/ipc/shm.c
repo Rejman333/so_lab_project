@@ -85,6 +85,9 @@ int SHM_AllDronesData_update_dron_location(SHM_AllDronesData *p_shm_all_drones_d
     if (old_location == LOCATION_MISSION) {
         p_shm_all_drones_data->dron_in_base_count++;
         p_shm_all_drones_data->dron_reserving_space_count--;
+        if (p_shm_all_drones_data->dron_reserving_space_count< 0) {
+            print_error("Reserve space is negative!, old location: %s, dron id %d",DronData_LocationToString(old_location), p_shm_all_drones_data->drones[dron_index].id);
+        }
     }
     p_shm_all_drones_data->drones[dron_index].location = new_dron_location;
     return 0;
@@ -99,6 +102,9 @@ int SHM_AllDronesData_delete_drone(SHM_AllDronesData *p_shm_all_drones_data, Sta
     }
     if (has_space_reserved) {
         p_shm_all_drones_data->dron_reserving_space_count--;
+        if (p_shm_all_drones_data->dron_reserving_space_count< 0) {
+            print_error("Reserve space is negative!, while deleting, dron id %d", p_shm_all_drones_data->drones[dron_index].id);
+        }
     }
     p_shm_all_drones_data->drones[dron_index].location = LOCATION_UNDEFINE;
     print_msg("Deleting dron on index: %d. His new location is: %s", dron_index,

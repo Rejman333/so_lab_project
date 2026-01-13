@@ -47,7 +47,7 @@ int semaphore_get(const key_t key) {
     const int semaphore_id = semget(key, 1, 0);
     if (semaphore_id == -1) {
         // Semaphore already exists OR other error
-        print_error("Failed to get a semaphore on key: %d", semaphore_id);
+        print_error("Failed to get a semaphore on key: %d", (int)key);
         return -1;
     }
 

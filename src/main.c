@@ -32,6 +32,11 @@
 #define MAXIMUM_CHARGE_TIME_DEFAULT 4000000
 #define MAXIMUM_LOADING_CYCLES 3
 
+#define ARGS_MAX_TIME_US   2000000L
+#define ARGS_MAX_PROCS     100000000L
+#define ARGS_MAX_MEMORY    250000000L
+#define ARGS_MAX_LOADING_CYCLES 30L
+
 #define LOG_FILE_NAME "log.txt"
 
 SHM_Configuration *shm_configuration = NULL;
@@ -56,14 +61,30 @@ FIFO_SEM fifo_sem = {
 
 int maximum_drones_in_memory = MAXIMUM_DRONES_IN_MEMORY;
 
-static int parse_positive_int(const char *arg, const char *name) {
+static int parse_positive_int(const char *arg,
+                              const char *name,
+                              long max_value) {
     char *end;
 
     errno = 0;
     const long value = strtol(arg, &end, 10);
 
-    if (errno != 0 || *end != '\0' || value <= 0 || value > INT_MAX) {
+    if (errno != 0 || *end != '\0' || value <= 0) {
         print_error("Invalid value for %s: %s\n", name, arg);
+        exit(EXIT_FAILURE);
+    }
+
+    if (value > max_value) {
+        print_error(
+            "Value for %s exceeds maximum allowed (%ld > %ld)\n",
+            name, value, max_value);
+        exit(EXIT_FAILURE);
+    }
+
+    if (value > INT_MAX) {
+        print_error(
+            "Value for %s exceeds INT_MAX (%ld)\n",
+            name, value);
         exit(EXIT_FAILURE);
     }
 
@@ -74,15 +95,22 @@ static void print_usage(const char *program_name) {
     fprintf(stderr,
             "Usage: %s [options]\n"
             "Options:\n"
-            "  -n <count>   starting drones count\n"
-            "  -r <time>    resupply interval(µs)\n"
-            "  -c <time>    maximum charge time(µs)\n"
-            "  -l <count>   max loading cycles\n"
-            "  -g <time>    gate time to pass(µs)\n"
-            "  -w <time>    drone work interval\n"
-            "  -m <count>   maximum drones in memory\n"
+            "  -n <count>   starting drones count (max %ld)\n"
+            "  -r <time>    resupply interval (µs, max %ld)\n"
+            "  -c <time>    maximum charge time (µs, max %ld)\n"
+            "  -l <count>   max loading cycles (max %ld)\n"
+            "  -g <time>    gate time to pass (µs, max %ld)\n"
+            "  -w <time>    drone work interval (µs, max %ld)\n"
+            "  -m <count>   maximum drones in memory (max %ld, >= 2 * starting drones)\n"
             "  -h           show this help message\n",
-            program_name
+            program_name,
+            ARGS_MAX_PROCS,
+            ARGS_MAX_TIME_US,
+            ARGS_MAX_TIME_US,
+            ARGS_MAX_LOADING_CYCLES,
+            ARGS_MAX_TIME_US,
+            ARGS_MAX_TIME_US,
+            ARGS_MAX_MEMORY
     );
 }
 
@@ -93,36 +121,37 @@ void process_argv(SHM_Configuration *cfg, int argc, char *argv[]) {
         switch (opt) {
             case 'n':
                 cfg->starting_drones_count =
-                        parse_positive_int(optarg, "starting_drones_count");
+                        parse_positive_int(optarg, "starting_drones_count", ARGS_MAX_PROCS);
                 break;
 
             case 'r':
                 cfg->resupply_interval =
-                        parse_positive_int(optarg, "resupply_interval");
+                        parse_positive_int(optarg, "resupply_interval", ARGS_MAX_TIME_US);
                 break;
 
             case 'c':
                 cfg->maximum_charge_time =
-                        parse_positive_int(optarg, "maximum_charge_time");
+                        parse_positive_int(optarg, "maximum_charge_time", ARGS_MAX_TIME_US);
                 break;
 
             case 'l':
                 cfg->max_loading_cycles =
-                        parse_positive_int(optarg, "max_loading_cycles");
+                        parse_positive_int(optarg, "max_loading_cycles", ARGS_MAX_LOADING_CYCLES);
                 break;
 
             case 'g':
                 cfg->gate_time_to_pass =
-                        parse_positive_int(optarg, "gate_time_to_pass");
+                        parse_positive_int(optarg, "gate_time_to_pass", ARGS_MAX_TIME_US);
                 break;
 
             case 'w':
                 cfg->dron_work_interval =
-                        parse_positive_int(optarg, "dron_work_interval");
+                        parse_positive_int(optarg, "dron_work_interval", ARGS_MAX_TIME_US);
                 break;
+
             case 'm':
                 maximum_drones_in_memory =
-                        parse_positive_int(optarg, "maximum_drones_in_memory");
+                        parse_positive_int(optarg, "maximum_drones_in_memory", ARGS_MAX_MEMORY);
                 break;
 
             case 'h':
@@ -136,7 +165,14 @@ void process_argv(SHM_Configuration *cfg, int argc, char *argv[]) {
     }
 
     if (optind < argc) {
-        fprintf(stderr, "Unexpected argument: %s\n", argv[optind]);
+        print_error("Unexpected argument: %s\n", argv[optind]);
+        exit(EXIT_FAILURE);
+    }
+
+    if (maximum_drones_in_memory < 2L * cfg->starting_drones_count) {
+        print_error("Invalid configuration: maximum_drones_in_memory (%d) must be >= 2 * starting_drones_count (%ld)\n",
+                    maximum_drones_in_memory,
+                    2L * cfg->starting_drones_count);
         exit(EXIT_FAILURE);
     }
 }
@@ -259,7 +295,7 @@ int create_shm_config(SHM_Configuration *local_configuration) {
     return 0;
 }
 
-int create_shm_all_drones_data(SHM_Configuration* local_configuration) {
+int create_shm_all_drones_data(SHM_Configuration *local_configuration) {
     const key_t shm_all_drones_data_key = grab_key_from_file(ALL_DRONES_DATA_FILE_NAME);
     if (shm_all_drones_data_key < 0) {
         print_error("Cant grab key");

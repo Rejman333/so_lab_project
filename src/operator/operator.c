@@ -235,21 +235,6 @@ int get_shm_all_drones_data() {
     return 0;
 }
 
-int sleep_interruptible(const int sec, const int nsec) {
-    struct timespec req = {.tv_sec = sec, .tv_nsec = nsec};
-    struct timespec rem = {0};
-
-    while (!got_shutdown_requested) {
-        if (nanosleep(&req, &rem) == 0) return 0;
-        if (errno == EINTR) {
-            req = rem;
-            continue;
-        }
-        return -1;
-    }
-    return 1;
-}
-
 
 int main(int argc, char *argv[]) {
     setup_print(PROCESS_NAME, PROCESS_COLOR);
@@ -400,7 +385,6 @@ int main(int argc, char *argv[]) {
             close_main(EXIT_FAILURE);
         }
 
-        //reap_children_nonblocking();
         usleep(local_configuration.resupply_interval);
     }
 

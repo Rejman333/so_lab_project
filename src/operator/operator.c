@@ -80,7 +80,6 @@ int generate_starting_drones() {
     print_msg("=== Commander: Generating %d starting drones ===", local_configuration.starting_drones_count);
     for (int i = 0; i < local_configuration.starting_drones_count; ++i) {
         if (got_shutdown_requested) return 0;
-        print_msg("Creating dron");
         if (creat_dron(LOCATION_MISSION) < 0) {
             print_error("Failed to creat starting drone");
             return -1;
@@ -95,11 +94,12 @@ int describe_self() {
         return -1;
     }
 
-    print_msg("Drones in base: [%d+%d|%d] | Drones on missions [%d]",
+    print_msg("Drones in base: [%d+%d|%d] | Drones on missions [%d] | Drones working [%d]",
               shm_all_drones_data->dron_in_base_count,
               shm_all_drones_data->dron_reserving_space_count,
               shm_all_drones_data->maximum_dron_in_base_count,
-              shm_all_drones_data->dron_count - shm_all_drones_data->dron_in_base_count);
+              shm_all_drones_data->dron_count - shm_all_drones_data->dron_in_base_count,
+              shm_all_drones_data->dron_count);
 
     if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
         print_error("While waiting for semaphore: semop -1");
@@ -362,7 +362,6 @@ int main(int argc, char *argv[]) {
             close_main(EXIT_FAILURE);
         }
 
-        //Rozwarz rezerwowanie miejsca dla drona w tym miejscu
         int can_create_dron = (shm_all_drones_data->dron_in_base_count +
                                shm_all_drones_data->dron_reserving_space_count <
                                shm_all_drones_data->maximum_dron_in_base_count);
@@ -372,12 +371,12 @@ int main(int argc, char *argv[]) {
             close_main(EXIT_FAILURE);
         }
 
-        if (can_create_dron) {
-            if (creat_dron(LOCATION_BASE) < 0) {
-                print_msg_color(COLOR_SKY_BLUE, "Failed to creat a drone");
-                //We dont stop program on this
-            }
-        }
+         if (can_create_dron) {
+             if (creat_dron(LOCATION_BASE) < 0) {
+                 print_msg_color(COLOR_SKY_BLUE, "Failed to creat a drone");
+                 //We dont stop program on this
+             }
+         }
 
 
         if (describe_self() != 0) {

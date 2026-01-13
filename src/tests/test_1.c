@@ -45,10 +45,13 @@ int create_shm_all_drones_data() {
 
     *shm_all_drones_data = (SHM_AllDronesData){
         .capacity = maximum_drones_in_memory,
-        .next_dron_id = 0,
+        .next_dron_id = 1,
         .dron_in_base_count = 0,
         .maximum_dron_in_base_count = 0,
-        .drone_lost_count = 0,
+        .drone_lost_suicide = 0,
+        .drone_lost_decommissioned = 0,
+        .drone_lost_out_of_power = 0,
+        .drone_lost_other = 0,
         .dron_count = 0,
         .dron_reserving_space_count = 0
     };
@@ -228,7 +231,7 @@ int main() {
     success_found++;
 
 
-    if (SHM_AllDronesData_delete_drone(shm_all_drones_data, shm_stack, dron_index, 0) != 0) {
+    if (SHM_AllDronesData_delete_drone(shm_all_drones_data, shm_stack, dron_index, 0, DESTRUCTION_REASON_OTHER) != 0) {
         print_msg_color(COLOR_RED, "FAILURE: Deleting dron in SHM at index :%d", dron_index);
         errors_found++;
         test_cleen_up();

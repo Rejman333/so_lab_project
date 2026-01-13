@@ -85,8 +85,9 @@ int SHM_AllDronesData_update_dron_location(SHM_AllDronesData *p_shm_all_drones_d
     if (old_location == LOCATION_MISSION) {
         p_shm_all_drones_data->dron_in_base_count++;
         p_shm_all_drones_data->dron_reserving_space_count--;
-        if (p_shm_all_drones_data->dron_reserving_space_count< 0) {
-            print_error("Reserve space is negative!, old location: %s, dron id %d",DronData_LocationToString(old_location), p_shm_all_drones_data->drones[dron_index].id);
+        if (p_shm_all_drones_data->dron_reserving_space_count < 0) {
+            print_error("Reserve space is negative!, old location: %s, dron id %d",
+                        DronData_LocationToString(old_location), p_shm_all_drones_data->drones[dron_index].id);
         }
     }
     p_shm_all_drones_data->drones[dron_index].location = new_dron_location;
@@ -94,16 +95,35 @@ int SHM_AllDronesData_update_dron_location(SHM_AllDronesData *p_shm_all_drones_d
 };
 
 int SHM_AllDronesData_delete_drone(SHM_AllDronesData *p_shm_all_drones_data, Stack *free_space_stack,
-                                   const int dron_index, const int has_space_reserved) {
+                                   const int dron_index, const int has_space_reserved,
+                                   DronData_DESTRUCTION_REASON destruction_reason) {
     p_shm_all_drones_data->dron_count--;
-    p_shm_all_drones_data->drone_lost_count++;
+
+    switch (destruction_reason) {
+        case DESTRUCTION_REASON_OUT_OF_POWER:
+            p_shm_all_drones_data->drone_lost_out_of_power++;
+            break;
+
+        case DESTRUCTION_REASON_DECOMMISSIONED:
+            p_shm_all_drones_data->drone_lost_decommissioned++;
+            break;
+
+        case DESTRUCTION_REASON_SUICIDE:
+            p_shm_all_drones_data->drone_lost_suicide++;
+            break;
+        default:
+            p_shm_all_drones_data->drone_lost_other++;
+    }
+
+
     if (p_shm_all_drones_data->drones[dron_index].location == LOCATION_BASE) {
         p_shm_all_drones_data->dron_in_base_count--;
     }
     if (has_space_reserved) {
         p_shm_all_drones_data->dron_reserving_space_count--;
-        if (p_shm_all_drones_data->dron_reserving_space_count< 0) {
-            print_error("Reserve space is negative!, while deleting, dron id %d", p_shm_all_drones_data->drones[dron_index].id);
+        if (p_shm_all_drones_data->dron_reserving_space_count < 0) {
+            print_error("Reserve space is negative!, while deleting, dron id %d",
+                        p_shm_all_drones_data->drones[dron_index].id);
         }
     }
     p_shm_all_drones_data->drones[dron_index].location = LOCATION_UNDEFINE;
@@ -120,7 +140,7 @@ int SHM_AllDronesData_get_dron_pid(const SHM_AllDronesData *p_shm_all_drones_dat
     for (int i = 0; i < p_shm_all_drones_data->capacity; ++i) {
         if (p_shm_all_drones_data->drones[i].location != LOCATION_UNDEFINE) {
             print_msg("Found dron on index: %d. His location is: %s", i,
-              DronData_LocationToString(p_shm_all_drones_data->drones[i].location));
+                      DronData_LocationToString(p_shm_all_drones_data->drones[i].location));
             return p_shm_all_drones_data->drones[i].pid;
         }
     }

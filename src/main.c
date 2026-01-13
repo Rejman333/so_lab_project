@@ -33,8 +33,8 @@
 #define MAXIMUM_LOADING_CYCLES 3
 
 #define ARGS_MAX_TIME_US   2000000L
-#define ARGS_MAX_PROCS     100000000L
-#define ARGS_MAX_MEMORY    250000000L
+#define ARGS_MAX_PROCS     1000000L
+#define ARGS_MAX_MEMORY    2500000L
 #define ARGS_MAX_LOADING_CYCLES 30L
 
 #define LOG_FILE_NAME "log.txt"
@@ -317,10 +317,13 @@ int create_shm_all_drones_data(SHM_Configuration *local_configuration) {
 
     *shm_all_drones_data = (SHM_AllDronesData){
         .capacity = maximum_drones_in_memory,
-        .next_dron_id = 0,
+        .next_dron_id = 1,
         .dron_in_base_count = 0,
         .maximum_dron_in_base_count = (local_configuration->starting_drones_count / 2) - 1,
-        .drone_lost_count = 0,
+        .drone_lost_suicide = 0,
+        .drone_lost_decommissioned = 0,
+        .drone_lost_out_of_power = 0,
+        .drone_lost_other = 0,
         .dron_count = 0,
         .dron_reserving_space_count = 0
     };
@@ -385,6 +388,46 @@ int create_gate_fifo_sem() {
     return 0;
 }
 
+int print_simulation_report() {
+    if (!shm_all_drones_data) {
+        print_msg("Simulation report error: SHM is null");
+        return -1;
+    }
+
+    print_msg("===== SIMULATION REPORT =====");
+
+    print_msg("Next dron id: %d", shm_all_drones_data->next_dron_id);
+    print_msg("Capacity: %d", shm_all_drones_data->capacity);
+
+    print_msg("Total drones: %d", shm_all_drones_data->dron_count);
+    print_msg("Drones in base: %d", shm_all_drones_data->dron_in_base_count);
+    print_msg("Maximum drones in base: %d", shm_all_drones_data->maximum_dron_in_base_count);
+    print_msg("Drones reserving space: %d", shm_all_drones_data->dron_reserving_space_count);
+
+    if (shm_all_drones_data->dron_in_base_count > shm_all_drones_data->capacity) {
+        print_msg("WARNING: dron_in_base_count (%d) > capacity (%d)",
+                  shm_all_drones_data->dron_in_base_count, shm_all_drones_data->capacity);
+    }
+
+    print_msg("---- LOSSES ----");
+    print_msg("Lost (suicide): %d", shm_all_drones_data->drone_lost_suicide);
+    print_msg("Lost (decommissioned): %d", shm_all_drones_data->drone_lost_decommissioned);
+    print_msg("Lost (out of power): %d", shm_all_drones_data->drone_lost_out_of_power);
+    print_msg("Lost (other): %d", shm_all_drones_data->drone_lost_other);
+
+    int lost_total =
+        shm_all_drones_data->drone_lost_suicide +
+        shm_all_drones_data->drone_lost_decommissioned +
+        shm_all_drones_data->drone_lost_out_of_power +
+        shm_all_drones_data->drone_lost_other;
+
+    print_msg("Lost total: %d", lost_total);
+    print_msg("Lost total: %d", lost_total);
+    print_msg("===== END OF REPORT =====");
+
+    return 0;
+}
+
 int close_main(const int exit_code) {
     int status;
     if (system_commander_pid > -1) {
@@ -433,6 +476,7 @@ int close_main(const int exit_code) {
         shm_configuration_id = -1;
     }
     if (shm_all_drones_data_id > -1 && shm_all_drones_data) {
+        print_simulation_report();
         if (shm_detach(shm_all_drones_data) != 0) {
             print_error("shm_detach all_drones_data failed");
         }

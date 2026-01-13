@@ -20,6 +20,14 @@ typedef enum {
     LOCATION_MISSION
 } DronData_Location;
 
+typedef enum {
+    DESTRUCTION_REASON_OUT_OF_POWER,
+    DESTRUCTION_REASON_DECOMMISSIONED,
+    DESTRUCTION_REASON_SUICIDE,
+    DESTRUCTION_REASON_OTHER
+} DronData_DESTRUCTION_REASON;
+
+
 typedef struct {
     int id;
     int pid;
@@ -36,7 +44,10 @@ typedef struct {
 
     int capacity;
 
-    int drone_lost_count;
+    int drone_lost_suicide;
+    int drone_lost_decommissioned;
+    int drone_lost_out_of_power;
+    int drone_lost_other;
 
     DronData drones[];
 } SHM_AllDronesData;
@@ -88,7 +99,7 @@ int SHM_AllDronesData_update_dron_location(SHM_AllDronesData *p_shm_all_drones_d
                                            DronData_Location new_dron_location);
 
 int SHM_AllDronesData_delete_drone(SHM_AllDronesData *p_shm_all_drones_data, Stack *free_space_stack, int dron_index,
-                                   int has_space_reserved);
+                                   int has_space_reserved, DronData_DESTRUCTION_REASON destruction_reason);
 
 int SHM_AllDronesData_get_dron_pid(const SHM_AllDronesData *p_shm_all_drones_data);
 

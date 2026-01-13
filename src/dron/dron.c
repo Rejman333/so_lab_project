@@ -102,7 +102,7 @@ int close_main(const int exit_code) {
         }
     }
 
-    print_msg("Cleanup complete.");
+    print_msg("ID: %d Cleanup complete, exiting with code %d", dron_internal_data.my_id, exit_code);
     logger_shutdown();
     exit(exit_code);
 }
@@ -340,7 +340,7 @@ int process_sigusr1() {
         }
 
         SHM_AllDronesData_delete_drone(shm_all_drones_data, shm_stack, dron_internal_data.my_index,
-                                       dron_internal_data.have_reserved_space);
+                                       dron_internal_data.have_reserved_space, DESTRUCTION_REASON_SUICIDE);
 
         if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
@@ -368,7 +368,7 @@ int battery_state_check() {
         }
 
         SHM_AllDronesData_delete_drone(shm_all_drones_data, shm_stack, dron_internal_data.my_index,
-                                       dron_internal_data.have_reserved_space);
+                                       dron_internal_data.have_reserved_space, DESTRUCTION_REASON_OUT_OF_POWER);
 
         if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
             print_error("While waiting for semaphore: semop -1");
@@ -394,7 +394,7 @@ int force_base_return() {
             }
 
             SHM_AllDronesData_delete_drone(shm_all_drones_data, shm_stack, dron_internal_data.my_index,
-                                           dron_internal_data.have_reserved_space);
+                                           dron_internal_data.have_reserved_space, DESTRUCTION_REASON_DECOMMISSIONED);
 
             if (semaphore_unlock(shm_all_drones_data_semaphore_id) == -1) {
                 print_error("While waiting for semaphore: semop -1");
@@ -542,7 +542,7 @@ int try_adding_self_to_shm() {
     }
 
     if (shm_all_drones_data->dron_in_base_count + shm_all_drones_data->dron_reserving_space_count < shm_all_drones_data
-        ->maximum_dron_in_base_count) {
+        ->maximum_dron_in_base_count || dron_local_data.location == LOCATION_MISSION) {
         dron_internal_data.my_index = SHM_AllDronesData_add_dron(shm_all_drones_data, shm_stack, &dron_local_data);
         dron_internal_data.my_id = shm_all_drones_data->next_dron_id++;
         if (dron_internal_data.my_index == -1) {

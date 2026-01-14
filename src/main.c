@@ -32,7 +32,8 @@
 #define MAXIMUM_CHARGE_TIME_DEFAULT 4000000
 #define MAXIMUM_LOADING_CYCLES 3
 
-#define ARGS_MAX_TIME_US   2000000L
+#define ARGS_MAX_TIME_US_INTERVALS   8000000L
+#define ARGS_MAX_TIME_US_GATE   2000000L
 #define ARGS_MAX_PROCS     1000000L
 #define ARGS_MAX_MEMORY    2500000L
 #define ARGS_MAX_LOADING_CYCLES 30L
@@ -105,11 +106,11 @@ static void print_usage(const char *program_name) {
             "  -h           show this help message\n",
             program_name,
             ARGS_MAX_PROCS,
-            ARGS_MAX_TIME_US,
-            ARGS_MAX_TIME_US,
+            ARGS_MAX_TIME_US_INTERVALS,
+            ARGS_MAX_TIME_US_INTERVALS,
             ARGS_MAX_LOADING_CYCLES,
-            ARGS_MAX_TIME_US,
-            ARGS_MAX_TIME_US,
+            ARGS_MAX_TIME_US_GATE,
+            ARGS_MAX_TIME_US_INTERVALS,
             ARGS_MAX_MEMORY
     );
 }
@@ -126,12 +127,12 @@ void process_argv(SHM_Configuration *cfg, int argc, char *argv[]) {
 
             case 'r':
                 cfg->resupply_interval =
-                        parse_positive_int(optarg, "resupply_interval", ARGS_MAX_TIME_US);
+                        parse_positive_int(optarg, "resupply_interval", ARGS_MAX_TIME_US_INTERVALS);
                 break;
 
             case 'c':
                 cfg->maximum_charge_time =
-                        parse_positive_int(optarg, "maximum_charge_time", ARGS_MAX_TIME_US);
+                        parse_positive_int(optarg, "maximum_charge_time", ARGS_MAX_TIME_US_INTERVALS);
                 break;
 
             case 'l':
@@ -141,12 +142,12 @@ void process_argv(SHM_Configuration *cfg, int argc, char *argv[]) {
 
             case 'g':
                 cfg->gate_time_to_pass =
-                        parse_positive_int(optarg, "gate_time_to_pass", ARGS_MAX_TIME_US);
+                        parse_positive_int(optarg, "gate_time_to_pass", ARGS_MAX_TIME_US_GATE);
                 break;
 
             case 'w':
                 cfg->dron_work_interval =
-                        parse_positive_int(optarg, "dron_work_interval", ARGS_MAX_TIME_US);
+                        parse_positive_int(optarg, "dron_work_interval", ARGS_MAX_TIME_US_INTERVALS);
                 break;
 
             case 'm':
@@ -421,7 +422,6 @@ int print_simulation_report() {
         shm_all_drones_data->drone_lost_out_of_power +
         shm_all_drones_data->drone_lost_other;
 
-    print_msg("Lost total: %d", lost_total);
     print_msg("Lost total: %d", lost_total);
     print_msg("===== END OF REPORT =====");
 

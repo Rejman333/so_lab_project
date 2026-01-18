@@ -256,7 +256,18 @@ drones or accessing partially updated state.
 
 ---
 
-### Build Commands
+### Build Commands and Environments details
+
+```
+Distributor ID: Debian
+Description:    Debian GNU/Linux 11 (bullseye)
+Release:        11
+Codename:       bullseye
+
+CMAKE_VERSION 3.18.4
+CMAKE_C_STANDARD 11
+gcc version 8.5.0 (GCC)
+```
 
 ```bash
 # Example:
@@ -496,4 +507,5 @@ application.
 
 If the gate time is set to a long duration, the program may take longer to terminate. Drones cannot be stopped once they
 enter a gate; they will complete their gate activity before shutting down.
+
 
